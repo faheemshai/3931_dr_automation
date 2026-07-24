@@ -15,6 +15,7 @@ provider "aws" {
 }
 
 provider "vault" {
-  address = var.vault_address
-  token   = var.vault_token
+  address   = var.vault_address
+  token     = var.vault_token
+  namespace = var.vault_namespace != "" ? var.vault_namespace : null
 }

@@ -3,60 +3,70 @@
 # ---------------------------------------------------------------
 
 variable "project" {
-  type = string
+  description = "Short project name used as a prefix in all resource names"
+  type        = string
 }
 
 variable "environment" {
-  type = string
+  description = "Deployment environment label (prod / staging / dev)"
+  type        = string
 }
 
 variable "ami_id" {
-  type = string
+  description = "AMI ID for EC2 instances"
+  type        = string
 }
 
 variable "instance_type" {
-  type = string
+  description = "EC2 instance type (e.g. t3.micro, m6i.large)"
+  type        = string
 }
 
 variable "private_subnet_ids" {
-  type = list(string)
+  description = "List of private subnet IDs into which the ASG launches instances"
+  type        = list(string)
 }
 
 variable "app_sg_id" {
-  type = string
+  description = "ID of the application security group to attach to EC2 instances"
+  type        = string
 }
 
 variable "target_group_arn" {
-  type = string
+  description = "ARN of the ALB target group to register ASG instances with"
+  type        = string
 }
 
 variable "desired_capacity" {
-  type = number
+  description = "Desired number of EC2 instances in the Auto Scaling Group"
+  type        = number
 }
 
 variable "min_size" {
-  type = number
+  description = "Minimum number of instances the ASG will maintain"
+  type        = number
 }
 
 variable "max_size" {
-  type = number
+  description = "Maximum number of instances the ASG may scale out to"
+  type        = number
 }
 
-# ── Credentials supplied at runtime (from Vault module) ───────────
+# ── Credentials supplied at runtime from Vault ───────────────────
 variable "db_username" {
-  description = "Database username injected from Vault"
+  description = "Database username — injected from Vault KV secret"
   type        = string
   sensitive   = true
 }
 
 variable "db_password" {
-  description = "Database password injected from Vault"
+  description = "Database password — injected from Vault KV secret"
   type        = string
   sensitive   = true
 }
 
 variable "app_api_key" {
-  description = "Third-party API key injected from Vault"
+  description = "Third-party API key — injected from Vault KV secret"
   type        = string
   sensitive   = true
 }

@@ -29,9 +29,10 @@ module "vpc" {
 module "security_groups" {
   source = "./modules/security_groups"
 
-  project     = var.project
-  environment = var.environment
-  vpc_id      = module.vpc.vpc_id
+  project      = var.project
+  environment  = var.environment
+  vpc_id       = module.vpc.vpc_id
+  bastion_cidr = var.bastion_cidr
 }
 
 # ── 4. Application Load Balancer ─────────────────────────────────
@@ -43,6 +44,8 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   alb_sg_id         = module.security_groups.alb_sg_id
+  health_check_path = var.health_check_path
+  app_port          = var.app_port
 }
 
 # ── 5. EC2 / ASG – credentials flow from Vault ───────────────────
