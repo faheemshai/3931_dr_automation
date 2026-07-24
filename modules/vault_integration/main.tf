@@ -32,6 +32,7 @@ resource "vault_kv_secret_v2" "app_credentials" {
   data_json = jsonencode({
     # ── Dummy credentials (replace in Vault UI before go-live) ───
     db_username = "prod_db_user"                   # HARDCODED DEMO
+    # db_password = "Sup3rS3cr3t!Passw0rd#2024"    # HARDCODED DEMO
     app_api_key = "sk-demo-abc123XYZ-REPLACE-ME"   # HARDCODED DEMO
     ssh_key_id  = "prod-key-pair-demo"             # HARDCODED DEMO
   })
