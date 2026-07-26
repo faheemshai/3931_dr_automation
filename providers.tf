@@ -73,10 +73,14 @@ data "vault_kv_secret_v2" "ibm_credentials" {
   name  = var.vault_secret_path  # e.g. "ssh/keypair"
 }
 
-# ── Extract secrets into locals ───────────────────────────────────
+# ── Extract IBM API key into a local ──────────────────────────────
+# NOTE: The SSH public key is NOT extracted here.
+# It flows through its own dedicated path:
+#   data source in modules/vault_integration → output ssh_public_key
+#   → module.networking(ssh_public_key) → ibm_is_ssh_key.vault_key
+# That path is wired in main.tf and is separate from the provider bootstrap.
 locals {
-  ibm_api_key    = data.vault_kv_secret_v2.ibm_credentials.data["ibm_api_key"]
-  ssh_public_key = data.vault_kv_secret_v2.ibm_credentials.data["public_key"]
+  ibm_api_key = data.vault_kv_secret_v2.ibm_credentials.data["ibm_api_key"]
 }
 
 # ── IBM Cloud provider — API key sourced from Vault KV ────────────

@@ -132,6 +132,133 @@ ibmcloud   >= 2.x   (optional — for manual verification)
 
 ---
 
+## SSH Key Pair — Generation and Loading into Vault
+
+### Will a locally generated key pair work with IBM Cloud?
+
+**Yes — completely.** IBM Cloud `ibm_is_ssh_key` accepts any standard OpenSSH public key.
+There is no IBM-specific format. The private key **never leaves your machine** and is never
+stored in Vault, Terraform state, or anywhere else. Only the public key goes into Vault.
+
+```
+Your machine
+  ├── ~/.ssh/id_ed25519        ← private key  (stays here, never shared)
+  └── ~/.ssh/id_ed25519.pub    ← public key   → stored in Vault → ibm_is_ssh_key → VSI
+```
+
+### Supported key types
+
+| Type | Bits | Command | Notes |
+|---|---|---|---|
+| **Ed25519** | 256 | `ssh-keygen -t ed25519` | ✅ Recommended — modern, short key, strongest security |
+| **RSA** | 4096 | `ssh-keygen -t rsa -b 4096` | ✅ Widely compatible fallback |
+| RSA | 2048 | `ssh-keygen -t rsa -b 2048` | ⚠️ Minimum accepted — use 4096 instead |
+| ECDSA | 521 | `ssh-keygen -t ecdsa -b 521` | ✅ Supported |
+| DSA | — | — | ❌ Not supported by IBM Cloud |
+
+> IBM Cloud rejects keys shorter than RSA-2048. Always use Ed25519 or RSA-4096 for production.
+
+### Step-by-step: generate, inspect, load into Vault
+
+**1. Generate the key pair (run once on your local machine)**
+
+```bash
+# Ed25519 — recommended
+ssh-keygen -t ed25519 -C "ent-demo-vsil@eu-de-2" -f ~/.ssh/ent_demo_ed25519
+
+# RSA 4096 — if you need broader compatibility
+ssh-keygen -t rsa -b 4096 -C "ent-demo-vsi@eu-de-2" -f ~/.ssh/ent_demo_rsa4096
+```
+
+This creates two files:
+
+```
+~/.ssh/ent_demo_ed25519        ← PRIVATE KEY  — keep this safe, never share
+~/.ssh/ent_demo_ed25519.pub    ← PUBLIC KEY   — this is what you put in Vault
+```
+
+**2. Inspect the public key — confirm the format looks correct**
+
+```bash
+cat ~/.ssh/ent_demo_ed25519.pub
+# Expected output (one line):
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... ent-demo-vsi@eu-de-2
+#  ▲           ▲                           ▲
+#  key type    base64 key material          comment (optional)
+```
+
+IBM Cloud requires this exact single-line OpenSSH public key format.
+Do **not** use the `-----BEGIN PUBLIC KEY-----` PEM format — that will be rejected.
+
+**3. Load both secrets into Vault (run by operator with a privileged Vault token)**
+
+```bash
+# Single command — writes public_key and ibm_api_key in one transaction
+vault kv put kv/ent-demo/ssh/keypair \
+  public_key="$(cat ~/.ssh/ent_demo_ed25519.pub)" \
+  ibm_api_key="<your-ibm-cloud-api-key>"
+
+# Verify what was stored (public_key value will be shown)
+vault kv get kv/ent-demo/ssh/keypair
+```
+
+**4. Test SSH access after `terraform apply`**
+
+```bash
+# Get a VSI private IP from Terraform output
+terraform output vsi_private_ips
+
+# SSH in from your bastion / VPN (using the private key that matches what's in Vault)
+ssh -i ~/.ssh/ent_demo_ed25519 root@<vsi-private-ip>
+```
+
+> IBM Cloud CentOS Stream 9 VSIs use `root` as the default user for SSH key injection.
+> The public key is written to `/root/.ssh/authorized_keys` at first boot.
+
+### What happens inside Terraform
+
+```
+vault kv put ... public_key="ssh-ed25519 AAAA..."
+        │
+        ▼
+Vault KV v2  kv/ent-demo/ssh/keypair
+        │
+        ├─ read by providers.tf      → ibm_api_key  → provider "ibm"
+        │
+        └─ read by module.vault_integration
+                  │
+                  └─ output ssh_public_key
+                            │
+                            ▼
+                  module.networking (vpc module)
+                            │
+                            ▼
+                  resource "ibm_is_ssh_key" "vault_key"
+                    name       = "ent-demo-prod-vault-key"
+                    public_key = "ssh-ed25519 AAAA..."
+                            │
+                            ▼
+                  resource "ibm_is_instance" "app"
+                    keys = [ibm_is_ssh_key.vault_key.id]
+                    → public key injected into /root/.ssh/authorized_keys at boot
+```
+
+### Rotating the SSH key
+
+```bash
+# Generate a new key pair locally
+ssh-keygen -t ed25519 -C "ent-demo-vsi@eu-de-2-rotated" -f ~/.ssh/ent_demo_ed25519_new
+
+# Update ONLY the public_key field in Vault (ibm_api_key is untouched)
+vault kv patch kv/ent-demo/ssh/keypair \
+  public_key="$(cat ~/.ssh/ent_demo_ed25519_new.pub)"
+
+# Terraform apply re-registers a new ibm_is_ssh_key and replaces VSIs
+terraform apply
+```
+
+---
+
 ## One-Time Setup
 
 ### 1 — Vault admin: enable JWT auth and create the role
