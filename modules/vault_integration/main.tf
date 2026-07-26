@@ -1,26 +1,36 @@
 # ---------------------------------------------------------------
 # modules/vault_integration/main.tf
 #
-# This module:
-#  1. Ensures the KV v2 mount exists in Vault Enterprise
-#  2. Writes placeholder secrets (demo phase — replace with real
-#     values in Vault before go-live)
-#  3. Reads back:
-#       - SSH public key  → registered as ibm_is_ssh_key
-#       - IBM Cloud API key → wired into the ibm provider
+# With TFE Dynamic Credentials this module is READ-ONLY against Vault.
+# The short-lived JWT token TFE obtains has a scoped policy — it can
+# read secrets but should NOT write them.
 #
-# Demo flow:
-#   Phase A – "Before Vault" : placeholder values written here
-#   Phase B – "After Vault"  : load real values with vault kv put,
-#                              then re-run terraform apply
+# What this module does:
+#   1. Ensures the KV v2 mount exists (idempotent)
+#   2. Reads the ssh/keypair secret — outputs ssh_public_key to the
+#      vpc module so it can register ibm_is_ssh_key
 #
-# ⚠️  To load real values into Vault:
+# The IBM Cloud API key is read in providers.tf (root-level data source)
+# and fed directly into the ibm provider — it is NOT re-read here.
+#
+# ── One-time secret population (run by a Vault admin, not TFE) ────
 #   vault kv put kv/ent-demo/ssh/keypair \
-#     public_key="ssh-rsa AAAA... user@host" \
+#     public_key="$(cat ~/.ssh/id_rsa.pub)" \
 #     ibm_api_key="<your-ibm-cloud-api-key>"
+#
+# ── Required Vault policy for the TFE JWT role ────────────────────
+#   path "kv/data/ent-demo/ssh/keypair" {
+#     capabilities = ["read"]
+#   }
+#   path "sys/mounts/kv/ent-demo" {
+#     capabilities = ["read"]
+#   }
 # ---------------------------------------------------------------
 
 # ── Ensure the KV v2 mount exists ────────────────────────────────
+# This is a read-safe, idempotent resource — it will not error if the
+# mount already exists, and creates it only on first apply by a
+# privileged operator token (not the scoped TFE JWT token).
 resource "vault_mount" "kv" {
   path        = var.kv_mount
   type        = "kv"
@@ -28,32 +38,8 @@ resource "vault_mount" "kv" {
   description = "KV v2 mount for ${var.project} secrets"
 }
 
-# ── Write DEMO placeholder secrets (Phase A) ─────────────────────
-# ⚠️  DEMO ONLY — both values are placeholders.
-#     The ignore_changes lifecycle ensures Terraform never overwrites
-#     real values that have been loaded externally into Vault.
-resource "vault_kv_secret_v2" "ssh_keypair" {
-  mount               = vault_mount.kv.path
-  name                = var.secret_path
-  delete_all_versions = false
-
-  data_json = jsonencode({
-    # ── SSH public key (replace in Vault before go-live) ──────────
-    public_key  = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0g28...DEMO-REPLACE-ME demo@ent-demo"
-    # ── IBM Cloud API key (replace in Vault before go-live) ───────
-    ibm_api_key = "DEMO-IBM-API-KEY-REPLACE-ME"
-  })
-
-  lifecycle {
-    # Prevent Terraform from overwriting real secrets loaded externally
-    ignore_changes = [data_json]
-  }
-}
-
-# ── Read back all secrets ────────────────────────────────────────
+# ── Read the secret (ssh public key + ibm api key) ────────────────
 data "vault_kv_secret_v2" "ssh_keypair" {
   mount = vault_mount.kv.path
   name  = var.secret_path
-
-  depends_on = [vault_kv_secret_v2.ssh_keypair]
 }

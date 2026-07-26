@@ -16,12 +16,14 @@ terraform {
     }
   }
 
-  # Terraform Enterprise / HCP Terraform remote backend
-  # Uncomment and fill in when running against TFE/TFC
-  # cloud {
-  #   organization = "my-org"
-  #   workspaces {
-  #     name = "prod-ibm-vsi-demo"
-  #   }
-  # }
+  # ── Terraform Enterprise remote backend ─────────────────────────
+  # Dynamic Credentials (Workload Identity) are configured in the
+  # TFE workspace environment variables — no static tokens required.
+  # See: https://developer.hashicorp.com/terraform/cloud-docs/workspaces/dynamic-provider-credentials
+  cloud {
+    organization = "my-org" # ← replace with your TFE organisation
+    workspaces {
+      name = "prod-ibm-vsi-demo" # ← replace with your workspace name
+    }
+  }
 }

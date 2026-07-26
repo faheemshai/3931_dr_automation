@@ -80,24 +80,24 @@ variable "image_name" {
   default     = "ibm-centos-stream-9-amd64-17"
 }
 
-# ── Vault ─────────────────────────────────────────────────────────
-variable "vault_address" {
-  description = "Full URL of the Vault server (e.g. https://vault.example.com:8200)"
+# ── Vault Enterprise + TFE Dynamic Credentials ───────────────────
+# vault_address, vault_token, vault_namespace are NOT declared here.
+# TFE injects them automatically via:
+#   TFC_VAULT_ADDR          → VAULT_ADDR
+#   TFC_VAULT_NAMESPACE     → VAULT_NAMESPACE
+#   TFC_VAULT_PROVIDER_AUTH → triggers JWT auth
+# Only the JWT role name and auth mount path are configurable here.
+
+variable "vault_jwt_auth_path" {
+  description = "Mount path of the JWT auth method in Vault (e.g. jwt)"
   type        = string
-  default     = "http://127.0.0.1:8200"
+  default     = "jwt"
 }
 
-variable "vault_token" {
-  description = "Vault token for Terraform authentication. Set via TF_VAR_vault_token env var — never commit this value."
+variable "vault_jwt_role" {
+  description = "Vault JWT auth role name granted to this TFE workspace (e.g. tfe-ibm-demo)"
   type        = string
-  sensitive   = true
-  default     = "" # Override with: export TF_VAR_vault_token=<token>
-}
-
-variable "vault_namespace" {
-  description = "Vault Enterprise namespace (leave empty for OSS / HCP Vault Dedicated)"
-  type        = string
-  default     = ""
+  default     = "tfe-ibm-demo"
 }
 
 variable "vault_mount_path" {
@@ -107,7 +107,7 @@ variable "vault_mount_path" {
 }
 
 variable "vault_secret_path" {
-  description = "Path within the KV mount that holds the SSH key pair (e.g. ssh/keypair)"
+  description = "Path within the KV mount that holds both the SSH public key and IBM API key"
   type        = string
   default     = "ssh/keypair"
 }
