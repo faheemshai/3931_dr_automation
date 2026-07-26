@@ -1,12 +1,17 @@
 # ---------------------------------------------------------------
 # terraform.tfvars  –  IBM Cloud DEMO configuration
 #
-# SSH key is stored in Vault Enterprise under kv/ent-demo/ssh/keypair
-# and is read at plan/apply time by the vault_integration module.
+# Both the IBM Cloud API key AND the SSH public key are stored in
+# Vault Enterprise under kv/ent-demo/ssh/keypair and are read at
+# plan/apply time.  No IBM Cloud credentials ever live in this file.
 #
-# ⚠️  Set secrets via env vars — never commit them:
-#   export IC_API_KEY="<your IBM Cloud API key>"
+# ⚠️  Only the Vault token is needed as an env var:
 #   export TF_VAR_vault_token="<your Vault token>"
+#
+# ⚠️  Load real secrets into Vault before first apply:
+#   vault kv put kv/ent-demo/ssh/keypair \
+#     public_key="$(cat ~/.ssh/id_rsa.pub)" \
+#     ibm_api_key="<your-ibm-cloud-api-key>"
 # ---------------------------------------------------------------
 
 # ── IBM Cloud General ────────────────────────────────────────────

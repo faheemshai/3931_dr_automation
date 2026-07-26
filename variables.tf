@@ -17,13 +17,6 @@ variable "ibm_zone" {
   default     = "eu-de-2"
 }
 
-variable "ibmcloud_api_key" {
-  description = "IBM Cloud API key. Prefer setting via IC_API_KEY env var."
-  type        = string
-  sensitive   = true
-  default     = "" # Override with: export IC_API_KEY=<key>
-}
-
 variable "environment" {
   description = "Deployment environment label used in resource naming (prod / staging / dev)"
   type        = string

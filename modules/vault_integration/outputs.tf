@@ -8,7 +8,13 @@ output "ssh_public_key" {
   sensitive   = true
 }
 
+output "ibmcloud_api_key" {
+  description = "IBM Cloud API key read from Vault — passed to the ibm provider"
+  value       = data.vault_kv_secret_v2.ssh_keypair.data["ibm_api_key"]
+  sensitive   = true
+}
+
 output "secret_version" {
-  description = "Current version of the SSH keypair secret in Vault"
+  description = "Current version of the secrets in Vault"
   value       = data.vault_kv_secret_v2.ssh_keypair.version
 }
