@@ -12,22 +12,23 @@ variable "environment" {
   type        = string
 }
 
-variable "vpc_cidr" {
-  description = "Primary CIDR block for the VPC"
+variable "ibm_region" {
+  description = "IBM Cloud region (e.g. eu-de)"
   type        = string
 }
 
-variable "public_subnet_cidrs" {
-  description = "List of CIDR blocks for public subnets — one per AZ"
-  type        = list(string)
+variable "ibm_zone" {
+  description = "IBM Cloud zone inside the region (e.g. eu-de-2)"
+  type        = string
 }
 
-variable "private_subnet_cidrs" {
-  description = "List of CIDR blocks for private subnets — one per AZ"
-  type        = list(string)
+variable "subnet_cidr" {
+  description = "IPv4 CIDR block for the subnet in the target zone"
+  type        = string
 }
 
-variable "availability_zones" {
-  description = "List of AZs to spread subnets across (must align with subnet CIDR lists)"
-  type        = list(string)
+variable "ssh_public_key" {
+  description = "SSH public key material (from Vault) to register as an IBM Cloud SSH key"
+  type        = string
+  sensitive   = true
 }

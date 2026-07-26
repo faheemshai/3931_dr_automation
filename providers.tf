@@ -2,16 +2,13 @@
 # Providers
 # ---------------------------------------------------------------
 
-provider "aws" {
-  region = var.aws_region
+provider "ibm" {
+  region = var.ibm_region
 
-  default_tags {
-    tags = {
-      Project     = var.project
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-    }
-  }
+  # Credentials — set via environment variables (recommended):
+  #   export IC_API_KEY="<your IBM Cloud API key>"
+  # Or supply directly:
+  #   ibmcloud_api_key = var.ibmcloud_api_key
 }
 
 provider "vault" {

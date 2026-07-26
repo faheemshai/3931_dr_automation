@@ -1,9 +1,10 @@
 # ---------------------------------------------------------------
 # main.tf  –  Root module
-# Wires VPC → Security Groups → ALB → EC2 → Vault integration
+# Wires: Vault SSH key → networking → security groups → LB → VSIs
+# Target: IBM Cloud eu-de-2 | Default VPC | 2 × bx2-2x8 VSIs
 # ---------------------------------------------------------------
 
-# ── 1. Vault Integration (read/write secrets) ─────────────────────
+# ── 1. Vault Integration (SSH key pair from Vault Enterprise) ─────
 module "vault_integration" {
   source = "./modules/vault_integration"
 
@@ -13,26 +14,29 @@ module "vault_integration" {
   secret_path = var.vault_secret_path
 }
 
-# ── 2. VPC ────────────────────────────────────────────────────────
-module "vpc" {
+# ── 2. Networking (default VPC + subnet in eu-de-2) ──────────────
+module "networking" {
   source = "./modules/vpc"
 
-  project              = var.project
-  environment          = var.environment
-  vpc_cidr             = var.vpc_cidr
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
-  availability_zones   = var.availability_zones
+  project     = var.project
+  environment = var.environment
+  ibm_region  = var.ibm_region
+  ibm_zone    = var.ibm_zone
+  subnet_cidr = var.subnet_cidr
+
+  # IBM Cloud SSH key – public key retrieved from Vault
+  ssh_public_key = module.vault_integration.ssh_public_key
 }
 
 # ── 3. Security Groups ────────────────────────────────────────────
 module "security_groups" {
   source = "./modules/security_groups"
 
-  project      = var.project
-  environment  = var.environment
-  vpc_id       = module.vpc.vpc_id
-  bastion_cidr = var.bastion_cidr
+  project          = var.project
+  environment      = var.environment
+  vpc_id           = module.networking.vpc_id
+  ssh_allowed_cidr = var.ssh_allowed_cidr
+  app_port         = var.app_port
 }
 
 # ── 4. Application Load Balancer ─────────────────────────────────
@@ -41,30 +45,28 @@ module "alb" {
 
   project           = var.project
   environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  alb_sg_id         = module.security_groups.alb_sg_id
-  health_check_path = var.health_check_path
+  ibm_region        = var.ibm_region
+  subnet_id         = module.networking.subnet_id
   app_port          = var.app_port
+  health_check_path = var.health_check_path
 }
 
-# ── 5. EC2 / ASG – credentials flow from Vault ───────────────────
-module "ec2" {
-  source = "./modules/ec2"
+# ── 5. VSIs – SSH key & target pool wired from Vault + LB ────────
+module "vsi" {
+  source = "./modules/vsi"
 
-  project            = var.project
-  environment        = var.environment
-  ami_id             = var.ami_id
-  instance_type      = var.instance_type
-  private_subnet_ids = module.vpc.private_subnet_ids
-  app_sg_id          = module.security_groups.app_sg_id
-  target_group_arn   = module.alb.target_group_arn
-  desired_capacity   = var.desired_capacity
-  min_size           = var.min_size
-  max_size           = var.max_size
-
-  # ── Credentials piped from Vault ─────────────────────────────
-  db_username = module.vault_integration.db_username
-  db_password = module.vault_integration.db_password
-  app_api_key = module.vault_integration.app_api_key
+  project        = var.project
+  environment    = var.environment
+  ibm_zone       = var.ibm_zone
+  vsi_count      = var.vsi_count
+  vsi_profile    = var.vsi_profile
+  image_name     = var.image_name
+  vpc_id         = module.networking.vpc_id
+  subnet_id      = module.networking.subnet_id
+  ssh_key_id     = module.networking.ssh_key_id
+  lb_sg_id       = module.security_groups.lb_sg_id
+  vsi_sg_id      = module.security_groups.vsi_sg_id
+  lb_id          = module.alb.lb_id
+  lb_pool_id     = module.alb.pool_id
+  app_port       = var.app_port
 }

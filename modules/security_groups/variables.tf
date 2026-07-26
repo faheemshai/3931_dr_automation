@@ -17,8 +17,13 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "bastion_cidr" {
-  description = "CIDR block allowed to SSH (port 22) to application instances — restrict to your bastion / VPN range"
+variable "ssh_allowed_cidr" {
+  description = "CIDR block allowed to SSH (port 22) to VSI instances"
   type        = string
-  default     = "10.0.0.0/8"
+}
+
+variable "app_port" {
+  description = "TCP port the web application listens on"
+  type        = number
+  default     = 80
 }

@@ -12,29 +12,24 @@ variable "environment" {
   type        = string
 }
 
-variable "vpc_id" {
-  description = "ID of the VPC in which to create the ALB"
+variable "ibm_region" {
+  description = "IBM Cloud region (e.g. eu-de)"
   type        = string
 }
 
-variable "public_subnet_ids" {
-  description = "List of public subnet IDs across which the ALB is deployed"
-  type        = list(string)
-}
-
-variable "alb_sg_id" {
-  description = "ID of the security group to attach to the ALB"
+variable "subnet_id" {
+  description = "ID of the subnet in which to place the load balancer"
   type        = string
-}
-
-variable "health_check_path" {
-  description = "HTTP path the ALB target group uses for instance health checks"
-  type        = string
-  default     = "/health"
 }
 
 variable "app_port" {
-  description = "TCP port the application process listens on inside EC2 instances"
+  description = "TCP port the application listens on inside VSI instances"
   type        = number
-  default     = 8080
+  default     = 80
+}
+
+variable "health_check_path" {
+  description = "HTTP path the LB health monitor uses for member health checks"
+  type        = string
+  default     = "/"
 }

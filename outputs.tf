@@ -3,31 +3,41 @@
 # ---------------------------------------------------------------
 
 output "vpc_id" {
-  description = "ID of the created VPC"
-  value       = module.vpc.vpc_id
+  description = "ID of the default VPC used"
+  value       = module.networking.vpc_id
 }
 
-output "public_subnet_ids" {
-  description = "IDs of public subnets"
-  value       = module.vpc.public_subnet_ids
+output "subnet_id" {
+  description = "ID of the subnet in eu-de-2"
+  value       = module.networking.subnet_id
 }
 
-output "private_subnet_ids" {
-  description = "IDs of private subnets"
-  value       = module.vpc.private_subnet_ids
+output "ssh_key_id" {
+  description = "IBM Cloud SSH key ID (public key loaded from Vault)"
+  value       = module.networking.ssh_key_id
 }
 
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = module.alb.alb_dns_name
+output "lb_hostname" {
+  description = "Public hostname of the IBM Cloud Application Load Balancer"
+  value       = module.alb.lb_hostname
 }
 
-output "asg_name" {
-  description = "Name of the Auto Scaling Group"
-  value       = module.ec2.asg_name
+output "lb_id" {
+  description = "ID of the Application Load Balancer"
+  value       = module.alb.lb_id
+}
+
+output "vsi_ids" {
+  description = "List of VSI instance IDs"
+  value       = module.vsi.vsi_ids
+}
+
+output "vsi_private_ips" {
+  description = "Private IP addresses of the VSI instances"
+  value       = module.vsi.vsi_private_ips
 }
 
 output "vault_secret_version" {
-  description = "Current version of the secret in Vault"
+  description = "Current version of the SSH keypair secret in Vault"
   value       = module.vault_integration.secret_version
 }

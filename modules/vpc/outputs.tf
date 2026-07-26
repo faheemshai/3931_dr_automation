@@ -3,17 +3,21 @@
 # ---------------------------------------------------------------
 
 output "vpc_id" {
-  value = aws_vpc.this.id
+  description = "ID of the default VPC"
+  value       = data.ibm_is_vpc.default.id
 }
 
-output "public_subnet_ids" {
-  value = aws_subnet.public[*].id
+output "subnet_id" {
+  description = "ID of the subnet created in eu-de-2"
+  value       = ibm_is_subnet.app.id
 }
 
-output "private_subnet_ids" {
-  value = aws_subnet.private[*].id
+output "subnet_crn" {
+  description = "CRN of the subnet"
+  value       = ibm_is_subnet.app.crn
 }
 
-output "vpc_cidr_block" {
-  value = aws_vpc.this.cidr_block
+output "ssh_key_id" {
+  description = "ID of the IBM Cloud SSH key registered from Vault"
+  value       = ibm_is_ssh_key.vault_key.id
 }

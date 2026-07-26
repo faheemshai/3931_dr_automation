@@ -2,25 +2,13 @@
 # modules/vault_integration/outputs.tf
 # ---------------------------------------------------------------
 
-output "db_username" {
-  description = "Database username read from Vault"
-  value       = data.vault_kv_secret_v2.app_credentials.data["db_username"]
-  sensitive   = true
-}
-
-output "db_password" {
-  description = "Database password read from Vault"
-  value       = data.vault_kv_secret_v2.app_credentials.data["db_password"]
-  sensitive   = true
-}
-
-output "app_api_key" {
-  description = "Application API key read from Vault"
-  value       = data.vault_kv_secret_v2.app_credentials.data["app_api_key"]
+output "ssh_public_key" {
+  description = "SSH public key read from Vault — registered as IBM Cloud SSH key for VSI access"
+  value       = data.vault_kv_secret_v2.ssh_keypair.data["public_key"]
   sensitive   = true
 }
 
 output "secret_version" {
-  description = "Current version of the Vault secret"
-  value       = data.vault_kv_secret_v2.app_credentials.version
+  description = "Current version of the SSH keypair secret in Vault"
+  value       = data.vault_kv_secret_v2.ssh_keypair.version
 }

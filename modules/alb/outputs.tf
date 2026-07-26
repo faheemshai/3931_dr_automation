@@ -2,14 +2,22 @@
 # modules/alb/outputs.tf
 # ---------------------------------------------------------------
 
-output "alb_dns_name" {
-  value = aws_lb.this.dns_name
+output "lb_id" {
+  description = "ID of the IBM Cloud Application Load Balancer"
+  value       = ibm_is_lb.this.id
 }
 
-output "alb_arn" {
-  value = aws_lb.this.arn
+output "lb_hostname" {
+  description = "Hostname of the IBM Cloud Application Load Balancer"
+  value       = ibm_is_lb.this.hostname
 }
 
-output "target_group_arn" {
-  value = aws_lb_target_group.app.arn
+output "pool_id" {
+  description = "ID of the LB back-end pool (used to attach VSI members)"
+  value       = ibm_is_lb_pool.app.id
+}
+
+output "listener_id" {
+  description = "ID of the HTTP listener"
+  value       = ibm_is_lb_listener.http.id
 }

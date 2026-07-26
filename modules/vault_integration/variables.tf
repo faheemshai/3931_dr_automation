@@ -18,6 +18,6 @@ variable "kv_mount" {
 }
 
 variable "secret_path" {
-  description = "Path within the KV mount where application credentials are stored (e.g. app/credentials)"
+  description = "Path within the KV mount where the SSH keypair is stored (e.g. ssh/keypair)"
   type        = string
 }

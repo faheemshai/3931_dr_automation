@@ -4,11 +4,24 @@
 # operators have a single place to review and override inputs.
 # ---------------------------------------------------------------
 
-# ── General ──────────────────────────────────────────────────────
-variable "aws_region" {
-  description = "AWS region to deploy into (e.g. us-east-1)"
+# ── IBM Cloud General ────────────────────────────────────────────
+variable "ibm_region" {
+  description = "IBM Cloud region to deploy into (e.g. eu-de)"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-de"
+}
+
+variable "ibm_zone" {
+  description = "IBM Cloud zone inside the region (e.g. eu-de-2)"
+  type        = string
+  default     = "eu-de-2"
+}
+
+variable "ibmcloud_api_key" {
+  description = "IBM Cloud API key. Prefer setting via IC_API_KEY env var."
+  type        = string
+  sensitive   = true
+  default     = "" # Override with: export IC_API_KEY=<key>
 }
 
 variable "environment" {
@@ -28,80 +41,50 @@ variable "project" {
   default     = "ent-demo"
 }
 
-# ── VPC ──────────────────────────────────────────────────────────
-variable "vpc_cidr" {
-  description = "Primary CIDR block for the VPC (e.g. 10.0.0.0/16)"
+# ── Networking ───────────────────────────────────────────────────
+variable "subnet_cidr" {
+  description = "CIDR block for the subnet in eu-de-2 (used when not relying on default VPC subnet)"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.240.2.0/24"
 }
 
-variable "public_subnet_cidrs" {
-  description = "List of CIDR blocks for public subnets — one per AZ (ALB, NAT GW)"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "List of CIDR blocks for private subnets — one per AZ (EC2 ASG)"
-  type        = list(string)
-  default     = ["10.0.11.0/24", "10.0.12.0/24"]
-}
-
-variable "availability_zones" {
-  description = "List of AZs to deploy subnets into (must align with subnet CIDR lists)"
-  type        = list(string)
-  default     = ["us-east-1a", "us-east-1b"]
-}
-
-# ── Security Groups ───────────────────────────────────────────────
-variable "bastion_cidr" {
-  description = "CIDR block allowed to SSH (port 22) to application instances — restrict to your bastion / VPN range"
+# ── Security / SSH ────────────────────────────────────────────────
+variable "ssh_allowed_cidr" {
+  description = "CIDR block allowed to SSH (port 22) to VSI instances — restrict to your bastion / VPN range"
   type        = string
   default     = "10.0.0.0/8"
 }
 
-# ── ALB ──────────────────────────────────────────────────────────
-variable "health_check_path" {
-  description = "HTTP path the ALB target group uses for instance health checks"
-  type        = string
-  default     = "/health"
-}
-
+# ── Load Balancer / Web App ───────────────────────────────────────
 variable "app_port" {
-  description = "TCP port the application process listens on inside EC2 instances"
+  description = "TCP port the web application listens on inside VSI instances"
   type        = number
-  default     = 8080
+  default     = 80
 }
 
-# ── EC2 ──────────────────────────────────────────────────────────
-variable "instance_type" {
-  description = "EC2 instance type for the Auto Scaling Group (e.g. t3.micro, m6i.large)"
+variable "health_check_path" {
+  description = "HTTP path the LB pool member health monitor uses"
   type        = string
-  default     = "t3.micro"
+  default     = "/"
 }
 
-variable "ami_id" {
-  description = "AMI ID for EC2 instances — defaults to Amazon Linux 2023 in us-east-1"
-  type        = string
-  default     = "ami-0c101f26f147fa7fd" # Amazon Linux 2023 us-east-1
-}
-
-variable "desired_capacity" {
-  description = "Desired number of EC2 instances in the Auto Scaling Group"
+# ── VSI ──────────────────────────────────────────────────────────
+variable "vsi_count" {
+  description = "Number of VSI instances to create (fixed, not ASG)"
   type        = number
   default     = 2
 }
 
-variable "min_size" {
-  description = "Minimum number of instances the ASG will maintain"
-  type        = number
-  default     = 1
+variable "vsi_profile" {
+  description = "IBM Cloud VSI profile (e.g. bx2-2x8 = 2 vCPU / 8 GB RAM Flex)"
+  type        = string
+  default     = "bx2-2x8"
 }
 
-variable "max_size" {
-  description = "Maximum number of instances the ASG may scale out to"
-  type        = number
-  default     = 4
+variable "image_name" {
+  description = "IBM Cloud stock image name for the VSI"
+  type        = string
+  default     = "ibm-centos-stream-9-amd64-17"
 }
 
 # ── Vault ─────────────────────────────────────────────────────────
@@ -131,7 +114,7 @@ variable "vault_mount_path" {
 }
 
 variable "vault_secret_path" {
-  description = "Path within the KV mount that holds the application credentials (e.g. app/credentials)"
+  description = "Path within the KV mount that holds the SSH key pair (e.g. ssh/keypair)"
   type        = string
-  default     = "app/credentials"
+  default     = "ssh/keypair"
 }
