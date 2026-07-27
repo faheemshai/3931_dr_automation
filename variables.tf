@@ -47,10 +47,14 @@ variable "existing_subnet_name" {
   default     = ""
 }
 
-variable "subnet_cidr" {
-  description = "CIDR block used only when creating a new subnet (ignored if existing_subnet_name is set)"
-  type        = string
-  default     = "10.240.0.0/24"
+variable "subnet_address_count" {
+  description = <<-EOT
+    Number of IPv4 addresses for the new subnet when no existing_subnet_name is set.
+    IBM Cloud auto-carves a valid CIDR from the zone's default address prefix.
+    Must be a power of 2 (256 = /24, 512 = /23, 1024 = /22).
+  EOT
+  type        = number
+  default     = 256
 }
 
 # ── Security / SSH ────────────────────────────────────────────────

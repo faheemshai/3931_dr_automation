@@ -48,12 +48,17 @@ data "ibm_is_subnet" "existing" {
 }
 
 # ── Subnet: create new (only when no existing name given) ─────────
+# IBM Cloud requires the subnet CIDR to be a strict subset of one of
+# the VPC's zone address prefixes. Rather than hardcoding a CIDR that
+# must manually match IBM's auto-created prefix, we use
+# total_ipv4_address_count — IBM Cloud picks a valid CIDR automatically
+# from the zone's default address prefix (e.g. 10.240.64.0/18 for eu-de-2).
 resource "ibm_is_subnet" "new" {
-  count           = local.use_existing_subnet ? 0 : 1
-  name            = "${local.name_prefix}-subnet-${var.ibm_zone}"
-  vpc             = local.vpc_id
-  zone            = var.ibm_zone
-  ipv4_cidr_block = var.subnet_cidr
+  count                    = local.use_existing_subnet ? 0 : 1
+  name                     = "${local.name_prefix}-subnet-${var.ibm_zone}"
+  vpc                      = local.vpc_id
+  zone                     = var.ibm_zone
+  total_ipv4_address_count = var.subnet_address_count
 
   tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform"]
 }

@@ -22,10 +22,15 @@ variable "ibm_zone" {
   type        = string
 }
 
-variable "subnet_cidr" {
-  description = "IPv4 CIDR for the subnet — used only when creating a new subnet"
-  type        = string
-  default     = "10.240.2.0/24"
+variable "subnet_address_count" {
+  description = <<-EOT
+    Number of IPv4 addresses to allocate in the new subnet.
+    IBM Cloud carves a matching CIDR automatically from the zone's
+    default address prefix — avoids CIDR-mismatch errors.
+    Must be a power of 2 (e.g. 256 = /24, 512 = /23).
+  EOT
+  type        = number
+  default     = 256
 }
 
 # ── Existing resource names (leave empty to create new) ──────────

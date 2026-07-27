@@ -26,7 +26,7 @@ module "networking" {
   environment          = var.environment
   ibm_region           = var.ibm_region
   ibm_zone             = var.ibm_zone
-  subnet_cidr          = var.subnet_cidr
+  subnet_address_count = var.subnet_address_count
   existing_vpc_name    = var.existing_vpc_name
   existing_subnet_name = var.existing_subnet_name
 

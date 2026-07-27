@@ -36,9 +36,11 @@ project     = "ent-demo"
 
 # ── Networking ───────────────────────────────────────────────────
 # Empty strings → Terraform creates a new VPC + subnet in eu-de-2
+# subnet_address_count: IBM Cloud auto-carves a /24 (256 IPs) from the
+# zone's default address prefix — no CIDR collision possible.
 existing_vpc_name    = ""
 existing_subnet_name = ""
-subnet_cidr          = "10.240.0.0/24"   # used when creating the new subnet
+subnet_address_count = 256
 
 # ── Security / SSH ────────────────────────────────────────────────
 ssh_allowed_cidr = "10.0.0.0/8"
