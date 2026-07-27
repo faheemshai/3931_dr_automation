@@ -86,13 +86,13 @@ variable "image_name" {
 # vault_jwt_auth_path and vault_jwt_role are NOT needed — TFE handles auth.
 
 variable "vault_address" {
-  description = "Vault server URL (e.g. https://vault.example.com:8200)"
+  description = "Vault server URL — matches TFC_DEFAULT_VAULT_ADDR in TFE credential set"
   type        = string
-  default     = "https://vault.example.com:8200"
+  default     = "https://enterprise-vault.automation-18fdda76ef7730b16bdb4cb5e693c1eb-0000.us-south.containers.appdomain.cloud"
 }
 
 variable "vault_namespace" {
-  description = "Vault Enterprise namespace (e.g. eelab/Catalyst)"
+  description = "Vault Enterprise namespace — matches TFC_VAULT_NAMESPACE in TFE credential set"
   type        = string
   default     = "eelab/Catalyst"
 }

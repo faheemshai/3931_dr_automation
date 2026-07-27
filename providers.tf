@@ -45,7 +45,7 @@ data "vault_kv_secret_v2" "ibm_credentials" {
 locals {
   ibm_api_key = data.vault_kv_secret_v2.ibm_credentials.data["ibm_api_key"]
 }
-
+  
 # ── IBM Cloud provider — API key sourced from Vault KV ────────────
 provider "ibm" {
   region           = var.ibm_region
