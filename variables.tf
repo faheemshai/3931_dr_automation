@@ -81,27 +81,24 @@ variable "image_name" {
 }
 
 # ── Vault Enterprise + TFE Dynamic Credentials ───────────────────
-# vault_address, vault_token, vault_namespace are NOT declared here.
-# TFE injects them automatically via:
-#   TFC_VAULT_ADDR          → VAULT_ADDR
-#   TFC_VAULT_NAMESPACE     → VAULT_NAMESPACE
-#   TFC_VAULT_PROVIDER_AUTH → triggers JWT auth
-# Only the JWT role name and auth mount path are configurable here.
+# TFE sets VAULT_TOKEN automatically when TFC_VAULT_PROVIDER_AUTH=true.
+# vault_address and vault_namespace are the only provider arguments needed.
+# vault_jwt_auth_path and vault_jwt_role are NOT needed — TFE handles auth.
 
-variable "vault_jwt_auth_path" {
-  description = "Mount path of the JWT auth method in Vault (e.g. jwt)"
+variable "vault_address" {
+  description = "Vault server URL (e.g. https://vault.example.com:8200)"
   type        = string
-  default     = "jwt"
+  default     = "https://vault.example.com:8200"
 }
 
-variable "vault_jwt_role" {
-  description = "Vault JWT auth role name granted to this TFE workspace (e.g. tfe-ibm-demo)"
+variable "vault_namespace" {
+  description = "Vault Enterprise namespace (e.g. eelab/Catalyst)"
   type        = string
-  default     = "tfe-ibm-demo"
+  default     = "eelab/Catalyst"
 }
 
 variable "vault_mount_path" {
-  description = "KV mount name in Vault (e.g. kv) — namespace eelab/Catalyst"
+  description = "KV mount name in Vault (e.g. kv)"
   type        = string
   default     = "kv"
 }

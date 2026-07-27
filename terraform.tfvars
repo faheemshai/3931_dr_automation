@@ -46,11 +46,14 @@ vsi_count   = 2
 vsi_profile = "bx2-2x8"                      # Flex | 2 vCPU / 8 GB RAM
 image_name  = "ibm-centos-stream-9-amd64-17"
 
-# ── Vault Enterprise – JWT Dynamic Credentials ───────────────────
-# Namespace : eelab/Catalyst
-# Mount     : kv          (full path → kv/terraform)
-# Secret    : terraform   (holds public_key + ibm_api_key)
-vault_jwt_auth_path = "jwt"           # mount path of jwt auth method in Vault
-vault_jwt_role      = "tfc-role"  # Vault JWT role for this workspace
-vault_mount_path    = "kv"            # KV mount — namespace eelab/Catalyst
-vault_secret_path   = "terraform"     # secret path: kv/terraform
+# ── Vault Enterprise – TFE Dynamic Credentials ───────────────────
+# TFE sets VAULT_TOKEN automatically — no token or JWT args needed here.
+# Set these four workspace env vars in TFE UI (mark Sensitive):
+#   TFC_VAULT_PROVIDER_AUTH = true
+#   TFC_VAULT_ADDR          = https://vault.example.com:8200
+#   TFC_VAULT_NAMESPACE     = eelab/Catalyst
+#   TFC_VAULT_RUN_ROLE      = <your-vault-jwt-role>
+vault_address     = "https://vault.example.com:8200"  # ← replace with real Vault URL
+vault_namespace   = "eelab/Catalyst"
+vault_mount_path  = "kv"
+vault_secret_path = "terraform"   # kv/terraform holds public_key + ibm_api_key

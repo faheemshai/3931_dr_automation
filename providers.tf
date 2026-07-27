@@ -4,81 +4,44 @@
 # Vault Enterprise + Terraform Enterprise Dynamic Credentials
 # ═══════════════════════════════════════════════════════════
 #
-# How TFE Dynamic Credentials work (Workload Identity / JWT auth):
+# How TFE Dynamic Credentials work for the Vault provider:
 #
-#   1. TFE injects two env vars into every plan/apply run automatically:
-#        TFC_VAULT_PROVIDER_AUTH = "true"
-#        TFC_VAULT_ADDR          = "https://vault.example.com:8200"
-#        TFC_VAULT_NAMESPACE     = "admin/ent-demo"   (Enterprise)
-#        TFC_VAULT_RUN_ROLE      = "tfe-ibm-demo"     (JWT role name)
-#        VAULT_TOKEN             – NOT used / NOT needed
+#   When TFC_VAULT_PROVIDER_AUTH=true is set as a TFE workspace env var,
+#   TFE automatically:
+#     1. Mints a short-lived workload-identity JWT for the run
+#     2. Exchanges it with Vault for a scoped token (via JWT auth)
+#     3. Sets VAULT_TOKEN in the run environment
 #
-#   2. The vault provider below performs a JWT login against the
-#      Vault JWT auth method, exchanging the TFE workload identity
-#      JWT for a short-lived Vault token scoped to the named role.
-#      No static token ever exists.
+#   The vault provider below picks up VAULT_TOKEN automatically —
+#   NO auth_login_jwt block, NO explicit token argument needed.
+#   Only address and namespace are set here so the provider knows
+#   where to connect.
 #
-#   3. With that short-lived token the provider reads KV secrets
-#      (IBM API key, SSH public key) and the ibm provider is
-#      initialised with the API key extracted from Vault KV.
-#
-# Required Vault-side setup (one-time, by Vault admin):
-#   vault auth enable -path=jwt jwt
-#   vault write auth/jwt/config \
-#     oidc_discovery_url="https://<TFE_HOSTNAME>/.well-known/openid-configuration" \
-#     bound_issuer="https://<TFE_HOSTNAME>"
-#   vault write auth/jwt/role/tfe-ibm-demo \
-#     role_type="jwt" \
-#     bound_audiences="<TFE_VAULT_AUDIENCE>" \
-#     user_claim="terraform_full_workspace" \
-#     token_policies="ent-demo-policy" \
-#     token_ttl="20m" \
-#     token_max_ttl="30m"
-#
-# Required TFE workspace environment variables (set in TFE UI / API):
+# Required TFE workspace environment variables (set in TFE UI):
 #   TFC_VAULT_PROVIDER_AUTH = true
 #   TFC_VAULT_ADDR          = https://vault.example.com:8200
-#   TFC_VAULT_NAMESPACE     = admin/ent-demo          (Enterprise)
-#   TFC_VAULT_RUN_ROLE      = tfe-ibm-demo
+#   TFC_VAULT_NAMESPACE     = eelab/Catalyst
+#   TFC_VAULT_RUN_ROLE      = <your-vault-jwt-role-name>
 # ---------------------------------------------------------------
 
-# ── Vault provider — JWT Dynamic Credentials (TFE Workload Identity)
-# The provider reads TFC_VAULT_ADDR and TFC_VAULT_NAMESPACE from the
-# environment automatically.  We only supply the auth_login_jwt block
-# to tell it WHICH JWT role to use and where the JWT auth method is mounted.
+# ── Vault provider — address + namespace only ─────────────────────
+# TFE injects VAULT_TOKEN automatically when TFC_VAULT_PROVIDER_AUTH=true.
 provider "vault" {
-  # address and namespace are sourced from:
-  #   TFC_VAULT_ADDR      → VAULT_ADDR   (set by TFE automatically)
-  #   TFC_VAULT_NAMESPACE → VAULT_NAMESPACE (Enterprise, set by TFE)
-  # Do NOT set address or token here — TFE manages them.
-
-  auth_login_jwt {
-    # Mount path of the JWT auth method in Vault
-    mount = var.vault_jwt_auth_path    # default: "jwt"
-
-    # The role granted to this workspace's workload identity JWT.
-    # Must match the role created in Vault (see setup notes above).
-    role = var.vault_jwt_role          # e.g. "tfe-ibm-demo"
-
-    # The JWT itself is injected by TFE as the env var VAULT_TOKEN_FILE
-    # or TFC_VAULT_ENCODED_ID_TOKEN — the provider reads it automatically.
-    # No explicit jwt field is needed here.
-  }
+  address   = var.vault_address
+  namespace = var.vault_namespace
+  # token is set automatically by TFE via VAULT_TOKEN env var — do not set here
 }
 
 # ── Read IBM API key + SSH public key from Vault KV ───────────────
-# Runs after the vault provider has authenticated via JWT above.
 data "vault_kv_secret_v2" "ibm_credentials" {
-  mount = var.vault_mount_path   # e.g. "kv/ent-demo"
-  name  = var.vault_secret_path  # e.g. "ssh/keypair"
+  mount = var.vault_mount_path   # kv
+  name  = var.vault_secret_path  # terraform
 }
 
-# ── Extract IBM API key into a local ──────────────────────────────
-# NOTE: The SSH public key is NOT extracted here.
-# It flows through its own dedicated path:
-#   data source in modules/vault_integration → output ssh_public_key
-#   → module.networking(ssh_public_key) → ibm_is_ssh_key.vault_key
-# That path is wired in main.tf and is separate from the provider bootstrap.
+# ── Extract IBM API key into a local ─────────────────────────────
+# NOTE: ssh_public_key flows separately:
+#   module.vault_integration → output ssh_public_key
+#   → module.networking → ibm_is_ssh_key
 locals {
   ibm_api_key = data.vault_kv_secret_v2.ibm_credentials.data["ibm_api_key"]
 }

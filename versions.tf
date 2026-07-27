@@ -21,9 +21,9 @@ terraform {
   # TFE workspace environment variables — no static tokens required.
   # See: https://developer.hashicorp.com/terraform/cloud-docs/workspaces/dynamic-provider-credentials
   cloud {
-    organization = "my-org" # ← replace with your TFE organisation
+    organization = "eelab-automation" # ← replace with your TFE organisation
     workspaces {
-      name = "prod-ibm-vsi-demo" # ← replace with your workspace name
+      name = "tf_vault_demo" # ← replace with your workspace name
     }
   }
 }
