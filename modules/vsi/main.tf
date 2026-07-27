@@ -2,8 +2,8 @@
 # modules/vsi/main.tf
 # 2 × IBM Cloud Virtual Server Instances (fixed count, no ASG)
 # Image  : ibm-centos-stream-9-amd64-17
-# Profile: bx2-2x8 (Flex | 2 vCPU / 8 GB RAM)
-# Zone   : eu-de-2
+# Profile: bxf-2x8 (Flex | 2 vCPU / 8 GB RAM)
+# Zone   : eu-de-2  (var.ibm_zone)
 #
 # SSH public key is injected from Vault Enterprise via the
 # vpc module (ibm_is_ssh_key.vault_key).
@@ -38,9 +38,11 @@ resource "ibm_is_instance" "app" {
 
   # ── User-data: install nginx + basic web page ─────────────────
   user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
-    project     = var.project
-    environment = var.environment
+    project      = var.project
+    environment  = var.environment
     instance_num = count.index + 1
+    ibm_region   = var.ibm_region
+    ibm_zone     = var.ibm_zone
   })
 
   tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform", "index:${count.index + 1}"]

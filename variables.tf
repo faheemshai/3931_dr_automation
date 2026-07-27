@@ -6,25 +6,25 @@
 
 # ── IBM Cloud General ────────────────────────────────────────────
 variable "ibm_region" {
-  description = "IBM Cloud region to deploy into (e.g. eu-de)"
+  description = "IBM Cloud region — eu-de (Frankfurt)"
   type        = string
   default     = "eu-de"
 }
 
 variable "ibm_zone" {
-  description = "IBM Cloud zone inside the region (e.g. eu-de-2)"
+  description = "IBM Cloud availability zone — eu-de-2"
   type        = string
   default     = "eu-de-2"
 }
 
 variable "environment" {
-  description = "Deployment environment label used in resource naming (prod / staging / dev)"
+  description = "Deployment environment label used in resource naming (demo / prod / staging / dev)"
   type        = string
-  default     = "prod"
+  default     = "demo"
 
   validation {
-    condition     = contains(["prod", "staging", "dev"], var.environment)
-    error_message = "environment must be one of: prod, staging, dev."
+    condition     = contains(["demo", "prod", "staging", "dev"], var.environment)
+    error_message = "environment must be one of: demo, prod, staging, dev."
   }
 }
 
@@ -36,13 +36,13 @@ variable "project" {
 
 # ── Networking ───────────────────────────────────────────────────
 variable "existing_vpc_name" {
-  description = "Name of an existing IBM Cloud VPC to reuse. Leave empty to create a new one."
+  description = "Name of an existing IBM Cloud VPC to reuse. Leave empty ('') to create a new one in eu-de."
   type        = string
   default     = ""
 }
 
 variable "existing_subnet_name" {
-  description = "Name of an existing subnet to reuse. Leave empty to create a new one."
+  description = "Name of an existing subnet to reuse. Leave empty ('') to create a new one in eu-de-2."
   type        = string
   default     = ""
 }
@@ -50,7 +50,7 @@ variable "existing_subnet_name" {
 variable "subnet_cidr" {
   description = "CIDR block used only when creating a new subnet (ignored if existing_subnet_name is set)"
   type        = string
-  default     = "10.240.2.0/24"
+  default     = "10.240.0.0/24"
 }
 
 # ── Security / SSH ────────────────────────────────────────────────
@@ -81,9 +81,9 @@ variable "vsi_count" {
 }
 
 variable "vsi_profile" {
-  description = "IBM Cloud VSI profile (e.g. bx2-2x8 = 2 vCPU / 8 GB RAM Flex)"
+  description = "IBM Cloud VSI profile (bxf-2x8 = Flex | 2 vCPU / 8 GB RAM)"
   type        = string
-  default     = "bx2-2x8"
+  default     = "bxf-2x8"
 }
 
 variable "image_name" {

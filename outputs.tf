@@ -3,12 +3,12 @@
 # ---------------------------------------------------------------
 
 output "vpc_id" {
-  description = "ID of the default VPC used"
+  description = "ID of the VPC used (existing or newly created)"
   value       = module.networking.vpc_id
 }
 
 output "subnet_id" {
-  description = "ID of the subnet in eu-de-2"
+  description = "ID of the subnet in eu-de-2 (existing or newly created)"
   value       = module.networking.subnet_id
 }
 

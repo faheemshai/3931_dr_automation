@@ -2,12 +2,12 @@
 # ---------------------------------------------------------------
 # User Data – IBM Cloud VSI bootstrap
 # Image  : ibm-centos-stream-9-amd64-17
-# Profile: bx2-2x8  (Flex | 2 vCPU / 8 GB RAM)
-# Zone   : eu-de-2
+# Profile: bxf-2x8  (Flex | 2 vCPU / 8 GB RAM)
+# Region : ${ibm_region} / ${ibm_zone}
 #
-# Installs nginx and serves a basic status page that shows:
-#   - Project / environment (injected by Terraform from Vault flow)
-#   - Instance hostname and private IP
+# Installs nginx and serves a basic status page showing:
+#   - Project / environment (injected by Terraform)
+#   - Instance number, hostname and private IP
 # SSH key was provisioned via Vault Enterprise → ibm_is_ssh_key
 # ---------------------------------------------------------------
 set -euo pipefail
@@ -37,21 +37,23 @@ cat > /usr/share/nginx/html/index.html <<HTML
     td:first-child { font-weight: bold; background: #f7f8fa; width: 180px; }
     .badge { display: inline-block; background: #3b82d4; color: #fff;
              padding: 2px 10px; border-radius: 4px; font-size: 12px; }
+    .vault { color: #7c5cd8; font-weight: bold; }
   </style>
 </head>
 <body>
   <h1>&#128274; ${project} Demo App <span class="badge">${environment}</span></h1>
-  <p>SSH key was provisioned via <strong>HashiCorp Vault Enterprise</strong> →
-     IBM Cloud SSH key → VSI bootstrap.</p>
+  <p>SSH key provisioned via <span class="vault">HashiCorp Vault Enterprise</span>
+     &rarr; IBM Cloud SSH key &rarr; VSI bootstrap.</p>
   <table>
     <tr><td>Project</td><td>${project}</td></tr>
     <tr><td>Environment</td><td>${environment}</td></tr>
     <tr><td>Instance #</td><td>${instance_num}</td></tr>
     <tr><td>Hostname</td><td>$HOSTNAME</td></tr>
     <tr><td>Private IP</td><td>$PRIVATE_IP</td></tr>
-    <tr><td>Region / Zone</td><td>eu-de / eu-de-2</td></tr>
+    <tr><td>Region / Zone</td><td>${ibm_region} / ${ibm_zone}</td></tr>
     <tr><td>Image</td><td>ibm-centos-stream-9-amd64-17</td></tr>
-    <tr><td>Profile</td><td>bx2-2x8 (2 vCPU / 8 GB)</td></tr>
+    <tr><td>Profile</td><td>bxf-2x8 (Flex | 2 vCPU / 8 GB)</td></tr>
+    <tr><td>Secret source</td><td>Vault Enterprise &nbsp;&#8594;&nbsp; kv/terraform</td></tr>
   </table>
   <p style="margin-top:24px; font-size:12px; color:#57606a;">
     Managed by Terraform Enterprise &nbsp;|&nbsp; Secrets from Vault Enterprise
@@ -93,4 +95,4 @@ rm -f /etc/nginx/conf.d/default.conf
 systemctl enable nginx
 systemctl start nginx
 
-echo "Bootstrap complete: ${project}-${environment} instance ${instance_num}"
+echo "Bootstrap complete: ${project}-${environment} instance ${instance_num} (${ibm_zone})"

@@ -1,7 +1,8 @@
 # ---------------------------------------------------------------
 # main.tf  –  Root module
 # Wires: Vault SSH key → networking → security groups → LB → VSIs
-# Target: IBM Cloud eu-de-2 | Default VPC | 2 × bx2-2x8 VSIs
+# Target: IBM Cloud eu-de (Frankfurt) / eu-de-2 | 2 × bxf-2x8 VSIs
+# SSH key + IBM API key read from Vault Enterprise (kv/terraform)
 # ---------------------------------------------------------------
 
 # ── 1. Vault Integration (SSH key pair from Vault Enterprise) ─────
@@ -62,6 +63,7 @@ module "vsi" {
 
   project        = var.project
   environment    = var.environment
+  ibm_region     = var.ibm_region
   ibm_zone       = var.ibm_zone
   vsi_count      = var.vsi_count
   vsi_profile    = var.vsi_profile

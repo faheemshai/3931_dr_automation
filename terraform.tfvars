@@ -15,10 +15,11 @@
 #               ibm_api_key   ← IBM Cloud API key (add before apply)
 #
 # ── TFE workspace env vars (set once in TFE UI / API) ───────────
-#   TFC_VAULT_PROVIDER_AUTH = true
-#   TFC_VAULT_ADDR          = https://vault.example.com:8200
-#   TFC_VAULT_NAMESPACE     = eelab/Catalyst
-#   TFC_VAULT_RUN_ROLE      = tfe-ibm-demo
+#   TFC_VAULT_PROVIDER_AUTH   = true
+#   TFC_DEFAULT_VAULT_ADDR    = https://enterprise-vault.automation-...
+#   TFC_VAULT_NAMESPACE       = eelab/Catalyst
+#   TFC_VAULT_PLAN_ROLE       = tfc-role
+#   TFC_VAULT_APPLY_ROLE      = tfc-role
 #
 # ── Add IBM API key to Vault before first apply ──────────────────
 #   vault kv patch -namespace=eelab/Catalyst kv/terraform \
@@ -26,18 +27,18 @@
 # ---------------------------------------------------------------
 
 # ── IBM Cloud General ────────────────────────────────────────────
+# Target: eu-de (Frankfurt) · zone eu-de-2
+# New VPC and subnet will be created automatically (no existing ones)
 ibm_region  = "eu-de"
 ibm_zone    = "eu-de-2"
-environment = "prod"
+environment = "demo"
 project     = "ent-demo"
 
 # ── Networking ───────────────────────────────────────────────────
-# Set the exact names from IBM Cloud console (VPC → VPCs / Subnets).
-# IBM Cloud does not auto-create a VPC named "default" — use the real name.
-# Leave either value as "" to have Terraform create a new resource.
-existing_vpc_name    = "vpc-eelab"      # ← replace with name from IBM Cloud console
-existing_subnet_name = "sn-20260511-2"   # ← replace with name from IBM Cloud console
-# subnet_cidr          = "10.240.2.0/24"     # only used if existing_subnet_name = ""
+# Empty strings → Terraform creates a new VPC + subnet in eu-de-2
+existing_vpc_name    = ""
+existing_subnet_name = ""
+subnet_cidr          = "10.240.0.0/24"   # used when creating the new subnet
 
 # ── Security / SSH ────────────────────────────────────────────────
 ssh_allowed_cidr = "10.0.0.0/8"
@@ -48,11 +49,11 @@ health_check_path = "/"
 
 # ── VSI ──────────────────────────────────────────────────────────
 vsi_count   = 2
-vsi_profile = "bx2-2x8"                      # Flex | 2 vCPU / 8 GB RAM
+vsi_profile = "bxf-2x8"                      # Flex | 2 vCPU / 8 GB RAM
 image_name  = "ibm-centos-stream-9-amd64-17"
 
 # ── Vault Enterprise – TFE Dynamic Credentials ───────────────────
-# Values match the credential set configured in TFE (screenshot):
+# Values match the credential set configured in TFE:
 #   TFC_DEFAULT_VAULT_ADDR  = https://enterprise-vault.automation-...
 #   TFC_VAULT_NAMESPACE     = eelab/Catalyst
 #   TFC_VAULT_PLAN_ROLE     = tfc-role

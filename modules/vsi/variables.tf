@@ -12,6 +12,11 @@ variable "environment" {
   type        = string
 }
 
+variable "ibm_region" {
+  description = "IBM Cloud region (e.g. eu-de) — passed into user_data template for display"
+  type        = string
+}
+
 variable "ibm_zone" {
   description = "IBM Cloud zone to launch VSIs into (e.g. eu-de-2)"
   type        = string
@@ -24,7 +29,7 @@ variable "vsi_count" {
 }
 
 variable "vsi_profile" {
-  description = "IBM Cloud VSI profile (e.g. bx2-2x8)"
+  description = "IBM Cloud VSI profile (e.g. bxf-2x8 = Flex | 2 vCPU / 8 GB)"
   type        = string
 }
 

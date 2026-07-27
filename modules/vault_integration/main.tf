@@ -1,45 +1,39 @@
 # ---------------------------------------------------------------
 # modules/vault_integration/main.tf
 #
-# With TFE Dynamic Credentials this module is READ-ONLY against Vault.
-# The short-lived JWT token TFE obtains has a scoped policy — it can
-# read secrets but should NOT write them.
+# READ-ONLY — TFE Dynamic Credentials (scoped JWT token).
 #
-# What this module does:
-#   1. Ensures the KV v2 mount exists (idempotent)
-#   2. Reads the ssh/keypair secret — outputs ssh_public_key to the
-#      vpc module so it can register ibm_is_ssh_key
+# The TFE JWT role is bound to tfc-policy, which grants:
+#   path "kv/data/terraform"     { capabilities = ["read"] }
+#   path "kv/metadata/terraform" { capabilities = ["read"] }
 #
-# The IBM Cloud API key is read in providers.tf (root-level data source)
-# and fed directly into the ibm provider — it is NOT re-read here.
+# Creating or modifying mounts requires sys/mounts write permission,
+# which a scoped TFE token intentionally does NOT have.
+# → The vault_mount resource has been removed.
+# → The KV v2 mount "kv" must exist in Vault before running TFE.
+#   A Vault admin creates it once:
+#     vault secrets enable -path=kv kv-v2
 #
-# ── One-time secret population (run by a Vault admin, not TFE) ────
-#   vault kv put kv/ent-demo/ssh/keypair \
-#     public_key="$(cat ~/.ssh/id_rsa.pub)" \
+# What this module does at run-time (read-only):
+#   1. Reads the "terraform" secret from the existing kv mount
+#   2. Outputs ssh_public_key  → vpc module → ibm_is_ssh_key
+#   3. ibm_api_key is read separately in providers.tf (root)
+#
+# ── One-time Vault admin setup ─────────────────────────────────
+#   vault secrets enable -namespace=eelab/Catalyst -path=kv kv-v2
+#
+#   vault kv put -namespace=eelab/Catalyst kv/terraform \
+#     public_key="$(cat ~/.ssh/ent_demo_ed25519.pub)" \
 #     ibm_api_key="<your-ibm-cloud-api-key>"
 #
-# ── Required Vault policy for the TFE JWT role ────────────────────
-#   path "kv/data/ent-demo/ssh/keypair" {
-#     capabilities = ["read"]
-#   }
-#   path "sys/mounts/kv/ent-demo" {
-#     capabilities = ["read"]
-#   }
+# ── Required Vault policy (tfc-policy) ────────────────────────
+#   path "kv/data/terraform"     { capabilities = ["read"] }
+#   path "kv/metadata/terraform" { capabilities = ["read"] }
 # ---------------------------------------------------------------
 
-# ── Ensure the KV v2 mount exists ────────────────────────────────
-# This is a read-safe, idempotent resource — it will not error if the
-# mount already exists, and creates it only on first apply by a
-# privileged operator token (not the scoped TFE JWT token).
-resource "vault_mount" "kv" {
-  path        = var.kv_mount
-  type        = "kv"
-  options     = { version = "2" }
-  description = "KV v2 mount for ${var.project} secrets"
-}
-
 # ── Read the secret (ssh public key + ibm api key) ────────────────
+# The KV v2 mount "kv" and secret "terraform" must already exist.
 data "vault_kv_secret_v2" "ssh_keypair" {
-  mount = vault_mount.kv.path
+  mount = var.kv_mount
   name  = var.secret_path
 }

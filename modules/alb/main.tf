@@ -9,11 +9,6 @@ locals {
   name_prefix = "${var.project}-${var.environment}"
 }
 
-# ── Look up the subnet to place the LB in ────────────────────────
-data "ibm_is_subnet" "app" {
-  identifier = var.subnet_id
-}
-
 # ── Application Load Balancer ─────────────────────────────────────
 resource "ibm_is_lb" "this" {
   name    = "${local.name_prefix}-lb"
