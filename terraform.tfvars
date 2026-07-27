@@ -7,15 +7,21 @@
 #
 # No static tokens. No API keys. Nothing sensitive lives here.
 #
+# ── Vault location ───────────────────────────────────────────────
+#   Namespace : eelab/Catalyst
+#   Mount     : kv
+#   Secret    : terraform     (kv/terraform)
+#   Keys      : public_key    ← SSH public key (already written)
+#               ibm_api_key   ← IBM Cloud API key (add before apply)
+#
 # ── TFE workspace env vars (set once in TFE UI / API) ───────────
 #   TFC_VAULT_PROVIDER_AUTH = true
 #   TFC_VAULT_ADDR          = https://vault.example.com:8200
-#   TFC_VAULT_NAMESPACE     = admin/ent-demo          (Enterprise)
+#   TFC_VAULT_NAMESPACE     = eelab/Catalyst
 #   TFC_VAULT_RUN_ROLE      = tfe-ibm-demo
 #
-# ── Load secrets into Vault (one-time, by operator) ─────────────
-#   vault kv put kv/ent-demo/ssh/keypair \
-#     public_key="$(cat ~/.ssh/id_rsa.pub)" \
+# ── Add IBM API key to Vault before first apply ──────────────────
+#   vault kv patch -namespace=eelab/Catalyst kv/terraform \
 #     ibm_api_key="<your-ibm-cloud-api-key>"
 # ---------------------------------------------------------------
 
@@ -41,9 +47,10 @@ vsi_profile = "bx2-2x8"                      # Flex | 2 vCPU / 8 GB RAM
 image_name  = "ibm-centos-stream-9-amd64-17"
 
 # ── Vault Enterprise – JWT Dynamic Credentials ───────────────────
-# vault_address, vault_token and vault_namespace are injected by TFE.
-# Only the JWT auth mount and role name are set here.
+# Namespace : eelab/Catalyst
+# Mount     : kv          (full path → kv/terraform)
+# Secret    : terraform   (holds public_key + ibm_api_key)
 vault_jwt_auth_path = "jwt"           # mount path of jwt auth method in Vault
-vault_jwt_role      = "tfe-ibm-demo"  # Vault JWT role for this workspace
-vault_mount_path    = "kv/ent-demo"   # KV v2 mount
-vault_secret_path   = "ssh/keypair"   # secret holding public_key + ibm_api_key
+vault_jwt_role      = "tfc-role"  # Vault JWT role for this workspace
+vault_mount_path    = "kv"            # KV mount — namespace eelab/Catalyst
+vault_secret_path   = "terraform"     # secret path: kv/terraform

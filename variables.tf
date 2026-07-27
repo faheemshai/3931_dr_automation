@@ -101,13 +101,13 @@ variable "vault_jwt_role" {
 }
 
 variable "vault_mount_path" {
-  description = "KV v2 secrets engine mount path inside Vault (e.g. kv/ent-demo)"
+  description = "KV mount name in Vault (e.g. kv) — namespace eelab/Catalyst"
   type        = string
-  default     = "kv/ent-demo"
+  default     = "kv"
 }
 
 variable "vault_secret_path" {
-  description = "Path within the KV mount that holds both the SSH public key and IBM API key"
+  description = "Secret path within the KV mount (e.g. terraform → full path kv/terraform)"
   type        = string
-  default     = "ssh/keypair"
+  default     = "terraform"
 }
