@@ -35,8 +35,20 @@ variable "project" {
 }
 
 # ── Networking ───────────────────────────────────────────────────
+variable "existing_vpc_name" {
+  description = "Name of an existing IBM Cloud VPC to reuse. Leave empty to create a new one."
+  type        = string
+  default     = ""
+}
+
+variable "existing_subnet_name" {
+  description = "Name of an existing subnet to reuse. Leave empty to create a new one."
+  type        = string
+  default     = ""
+}
+
 variable "subnet_cidr" {
-  description = "CIDR block for the subnet in eu-de-2 (used when not relying on default VPC subnet)"
+  description = "CIDR block used only when creating a new subnet (ignored if existing_subnet_name is set)"
   type        = string
   default     = "10.240.2.0/24"
 }

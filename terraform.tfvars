@@ -32,7 +32,12 @@ environment = "prod"
 project     = "ent-demo"
 
 # ── Networking ───────────────────────────────────────────────────
-subnet_cidr = "10.240.2.0/24"
+# Set the exact names from IBM Cloud console (VPC → VPCs / Subnets).
+# IBM Cloud does not auto-create a VPC named "default" — use the real name.
+# Leave either value as "" to have Terraform create a new resource.
+existing_vpc_name    = "vpc-eelab"      # ← replace with name from IBM Cloud console
+existing_subnet_name = "sn-20260511-2"   # ← replace with name from IBM Cloud console
+# subnet_cidr          = "10.240.2.0/24"     # only used if existing_subnet_name = ""
 
 # ── Security / SSH ────────────────────────────────────────────────
 ssh_allowed_cidr = "10.0.0.0/8"

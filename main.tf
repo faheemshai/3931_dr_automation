@@ -14,15 +14,20 @@ module "vault_integration" {
   secret_path = var.vault_secret_path
 }
 
-# ── 2. Networking (default VPC + subnet in eu-de-2) ──────────────
+# ── 2. Networking ────────────────────────────────────────────────
+# Set existing_vpc_name / existing_subnet_name in terraform.tfvars
+# to reuse existing IBM Cloud resources.
+# Leave empty ("") to create new ones automatically.
 module "networking" {
   source = "./modules/vpc"
 
-  project     = var.project
-  environment = var.environment
-  ibm_region  = var.ibm_region
-  ibm_zone    = var.ibm_zone
-  subnet_cidr = var.subnet_cidr
+  project              = var.project
+  environment          = var.environment
+  ibm_region           = var.ibm_region
+  ibm_zone             = var.ibm_zone
+  subnet_cidr          = var.subnet_cidr
+  existing_vpc_name    = var.existing_vpc_name
+  existing_subnet_name = var.existing_subnet_name
 
   # IBM Cloud SSH key – public key retrieved from Vault
   ssh_public_key = module.vault_integration.ssh_public_key

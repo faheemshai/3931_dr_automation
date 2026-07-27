@@ -1,8 +1,11 @@
 # ---------------------------------------------------------------
 # modules/security_groups/main.tf
-# IBM Cloud VPC Security Groups:
+# IBM Cloud VPC Security Groups (IBM provider >= 1.65):
 #   lb-sg  : inbound port 80 from 0.0.0.0/0  (public-facing LB)
 #   vsi-sg : inbound app_port from lb-sg + SSH from bastion CIDR
+#
+# NOTE: The deprecated tcp{} nested block has been replaced with
+#   top-level  protocol + port_min + port_max  arguments.
 # ---------------------------------------------------------------
 
 locals {
@@ -22,11 +25,9 @@ resource "ibm_is_security_group_rule" "lb_inbound_http" {
   group     = ibm_is_security_group.lb.id
   direction = "inbound"
   remote    = "0.0.0.0/0"
-
-  tcp {
-    port_min = 80
-    port_max = 80
-  }
+  protocol  = "tcp"
+  port_min  = 80
+  port_max  = 80
 }
 
 # Allow all outbound from LB (to reach VSIs)
@@ -34,6 +35,7 @@ resource "ibm_is_security_group_rule" "lb_outbound_all" {
   group     = ibm_is_security_group.lb.id
   direction = "outbound"
   remote    = "0.0.0.0/0"
+  protocol  = "all"
 }
 
 # ── VSI Security Group ────────────────────────────────────────────
@@ -49,11 +51,9 @@ resource "ibm_is_security_group_rule" "vsi_inbound_app" {
   group     = ibm_is_security_group.vsi.id
   direction = "inbound"
   remote    = ibm_is_security_group.lb.id
-
-  tcp {
-    port_min = var.app_port
-    port_max = var.app_port
-  }
+  protocol  = "tcp"
+  port_min  = var.app_port
+  port_max  = var.app_port
 }
 
 # Allow inbound SSH from bastion / VPN CIDR
@@ -61,16 +61,15 @@ resource "ibm_is_security_group_rule" "vsi_inbound_ssh" {
   group     = ibm_is_security_group.vsi.id
   direction = "inbound"
   remote    = var.ssh_allowed_cidr
-
-  tcp {
-    port_min = 22
-    port_max = 22
-  }
+  protocol  = "tcp"
+  port_min  = 22
+  port_max  = 22
 }
 
-# Allow all outbound from VSI (yum updates, Vault calls, etc.)
+# Allow all outbound from VSI (dnf updates, Vault calls, etc.)
 resource "ibm_is_security_group_rule" "vsi_outbound_all" {
   group     = ibm_is_security_group.vsi.id
   direction = "outbound"
   remote    = "0.0.0.0/0"
+  protocol  = "all"
 }

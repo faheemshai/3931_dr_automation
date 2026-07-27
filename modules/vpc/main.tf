@@ -1,27 +1,66 @@
 # ---------------------------------------------------------------
 # modules/vpc/main.tf
-# Uses the default VPC in the target region.
-# Creates one subnet in eu-de-2 and registers the Vault SSH public
-# key as an IBM Cloud SSH key for VSI provisioning.
+#
+# Strategy: use existing VPC / subnet when names are provided,
+# create new ones only when the name variables are left empty.
+#
+#   existing_vpc_name    = ""        → creates <project>-<env>-vpc
+#   existing_vpc_name    = "my-vpc"  → looks up VPC named "my-vpc"
+#
+#   existing_subnet_name = ""              → creates subnet with subnet_cidr
+#   existing_subnet_name = "my-subnet"     → looks up that subnet
+#
+# The outputs always expose a single vpc_id and subnet_id regardless
+# of whether the resource was found or created.
 # ---------------------------------------------------------------
 
 locals {
   name_prefix = "${var.project}-${var.environment}"
+
+  # true = a name was supplied → look up existing resource
+  use_existing_vpc    = var.existing_vpc_name != ""
+  use_existing_subnet = var.existing_subnet_name != ""
 }
 
-# ── Look up the default VPC ───────────────────────────────────────
-data "ibm_is_vpc" "default" {
-  name = "default"
+# ── VPC: look up existing ─────────────────────────────────────────
+data "ibm_is_vpc" "existing" {
+  count = local.use_existing_vpc ? 1 : 0
+  name  = var.existing_vpc_name
 }
 
-# ── Subnet in eu-de-2 ────────────────────────────────────────────
-resource "ibm_is_subnet" "app" {
+# ── VPC: create new (only when no existing name given) ────────────
+resource "ibm_is_vpc" "new" {
+  count = local.use_existing_vpc ? 0 : 1
+  name  = "${local.name_prefix}-vpc"
+
+  tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform"]
+}
+
+# ── Resolved VPC ID (whichever path was taken) ────────────────────
+locals {
+  vpc_id = local.use_existing_vpc ? data.ibm_is_vpc.existing[0].id : ibm_is_vpc.new[0].id
+}
+
+# ── Subnet: look up existing ──────────────────────────────────────
+data "ibm_is_subnet" "existing" {
+  count = local.use_existing_subnet ? 1 : 0
+  name  = var.existing_subnet_name
+}
+
+# ── Subnet: create new (only when no existing name given) ─────────
+resource "ibm_is_subnet" "new" {
+  count           = local.use_existing_subnet ? 0 : 1
   name            = "${local.name_prefix}-subnet-${var.ibm_zone}"
-  vpc             = data.ibm_is_vpc.default.id
+  vpc             = local.vpc_id
   zone            = var.ibm_zone
   ipv4_cidr_block = var.subnet_cidr
 
   tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform"]
+}
+
+# ── Resolved Subnet ID (whichever path was taken) ─────────────────
+locals {
+  subnet_id = local.use_existing_subnet ? data.ibm_is_subnet.existing[0].id : ibm_is_subnet.new[0].id
 }
 
 # ── SSH Key (public key loaded from Vault Enterprise) ────────────

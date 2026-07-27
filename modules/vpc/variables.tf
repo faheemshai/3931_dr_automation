@@ -23,8 +23,28 @@ variable "ibm_zone" {
 }
 
 variable "subnet_cidr" {
-  description = "IPv4 CIDR block for the subnet in the target zone"
+  description = "IPv4 CIDR for the subnet — used only when creating a new subnet"
   type        = string
+  default     = "10.240.2.0/24"
+}
+
+# ── Existing resource names (leave empty to create new) ──────────
+variable "existing_vpc_name" {
+  description = <<-EOT
+    Name of an existing IBM Cloud VPC to reuse.
+    Leave empty ("") to create a new VPC named <project>-<env>-vpc.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "existing_subnet_name" {
+  description = <<-EOT
+    Name of an existing subnet inside the VPC to reuse.
+    Leave empty ("") to create a new subnet in var.ibm_zone.
+  EOT
+  type        = string
+  default     = ""
 }
 
 variable "ssh_public_key" {

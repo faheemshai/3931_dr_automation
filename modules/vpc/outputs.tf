@@ -3,18 +3,18 @@
 # ---------------------------------------------------------------
 
 output "vpc_id" {
-  description = "ID of the default VPC"
-  value       = data.ibm_is_vpc.default.id
+  description = "ID of the VPC (existing or newly created)"
+  value       = local.vpc_id
 }
 
 output "subnet_id" {
-  description = "ID of the subnet created in eu-de-2"
-  value       = ibm_is_subnet.app.id
+  description = "ID of the subnet (existing or newly created)"
+  value       = local.subnet_id
 }
 
 output "subnet_crn" {
   description = "CRN of the subnet"
-  value       = ibm_is_subnet.app.crn
+  value       = local.use_existing_subnet ? data.ibm_is_subnet.existing[0].crn : ibm_is_subnet.new[0].crn
 }
 
 output "ssh_key_id" {
