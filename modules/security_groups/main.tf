@@ -31,11 +31,11 @@ resource "ibm_is_security_group_rule" "lb_inbound_http" {
 }
 
 # Allow all outbound from LB (to reach VSIs)
+# protocol is intentionally omitted — omitting it means allow all protocols
 resource "ibm_is_security_group_rule" "lb_outbound_all" {
   group     = ibm_is_security_group.lb.id
   direction = "outbound"
   remote    = "0.0.0.0/0"
-  protocol  = "all"
 }
 
 # ── VSI Security Group ────────────────────────────────────────────
@@ -67,9 +67,9 @@ resource "ibm_is_security_group_rule" "vsi_inbound_ssh" {
 }
 
 # Allow all outbound from VSI (dnf updates, Vault calls, etc.)
+# protocol is intentionally omitted — omitting it means allow all protocols
 resource "ibm_is_security_group_rule" "vsi_outbound_all" {
   group     = ibm_is_security_group.vsi.id
   direction = "outbound"
   remote    = "0.0.0.0/0"
-  protocol  = "all"
 }
