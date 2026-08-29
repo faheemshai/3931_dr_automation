@@ -20,15 +20,15 @@
 #   3. ibm_api_key is read separately in providers.tf (root)
 #
 # ── One-time Vault admin setup ─────────────────────────────────
-#   vault secrets enable -namespace=eelab/Catalyst -path=kv kv-v2
+#   vault secrets enable -namespace=admin -path=kv kv-v2
 #
-#   vault kv put -namespace=eelab/Catalyst kv/terraform \
+#   vault kv put -namespace=admin -mount=kv IBM_cloud \
 #     public_key="$(cat ~/.ssh/ent_demo_ed25519.pub)" \
 #     ibm_api_key="<your-ibm-cloud-api-key>"
 #
 # ── Required Vault policy (tfc-policy) ────────────────────────
-#   path "kv/data/terraform"     { capabilities = ["read"] }
-#   path "kv/metadata/terraform" { capabilities = ["read"] }
+#   path "kv/data/IBM_cloud"     { capabilities = ["read"] }
+#   path "kv/metadata/IBM_cloud" { capabilities = ["read"] }
 # ---------------------------------------------------------------
 
 # ── Read the secret (ssh public key + ibm api key) ────────────────

@@ -29,3 +29,4 @@ ent_demo_ed25519.pub
 *.swo
 .idea/
 .vscode/
+.bob/

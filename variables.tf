@@ -104,13 +104,13 @@ variable "image_name" {
 variable "vault_address" {
   description = "Vault server URL — matches TFC_DEFAULT_VAULT_ADDR in TFE credential set"
   type        = string
-  default     = "https://enterprise-vault.automation-18fdda76ef7730b16bdb4cb5e693c1eb-0000.us-south.containers.appdomain.cloud"
+  default     = "https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200"
 }
 
 variable "vault_namespace" {
   description = "Vault Enterprise namespace — matches TFC_VAULT_NAMESPACE in TFE credential set"
   type        = string
-  default     = "eelab/Catalyst"
+  default     = "admin"
 }
 
 variable "vault_mount_path" {
@@ -120,7 +120,7 @@ variable "vault_mount_path" {
 }
 
 variable "vault_secret_path" {
-  description = "Secret path within the KV mount (e.g. terraform → full path kv/terraform)"
+  description = "Secret path within the KV mount (e.g. IBM_cloud → full path kv/IBM_cloud)"
   type        = string
-  default     = "terraform"
+  default     = "IBM_cloud"
 }

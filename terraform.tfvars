@@ -8,21 +8,21 @@
 # No static tokens. No API keys. Nothing sensitive lives here.
 #
 # ── Vault location ───────────────────────────────────────────────
-#   Namespace : eelab/Catalyst
+#   Namespace : admin
 #   Mount     : kv
-#   Secret    : terraform     (kv/terraform)
+#   Secret    : IBM_cloud     (kv/IBM_cloud)
 #   Keys      : public_key    ← SSH public key (already written)
 #               ibm_api_key   ← IBM Cloud API key (add before apply)
 #
-# ── TFE workspace env vars (set once in TFE UI / API) ───────────
+# ── TFC workspace env vars (set once in TFC UI / API) ───────────
 #   TFC_VAULT_PROVIDER_AUTH   = true
-#   TFC_DEFAULT_VAULT_ADDR    = https://enterprise-vault.automation-...
-#   TFC_VAULT_NAMESPACE       = eelab/Catalyst
+#   TFC_DEFAULT_VAULT_ADDR    = https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200
+#   TFC_VAULT_NAMESPACE       = admin
 #   TFC_VAULT_PLAN_ROLE       = tfc-role
 #   TFC_VAULT_APPLY_ROLE      = tfc-role
 #
 # ── Add IBM API key to Vault before first apply ──────────────────
-#   vault kv patch -namespace=eelab/Catalyst kv/terraform \
+#   vault kv patch -namespace=admin -mount=kv IBM_cloud \
 #     ibm_api_key="<your-ibm-cloud-api-key>"
 # ---------------------------------------------------------------
 
@@ -54,13 +54,19 @@ vsi_count   = 2
 vsi_profile = "bxf-2x8"                      # Flex | 2 vCPU / 8 GB RAM
 image_name  = "ibm-centos-stream-9-amd64-17"
 
-# ── Vault Enterprise – TFE Dynamic Credentials ───────────────────
-# Values match the credential set configured in TFE:
-#   TFC_DEFAULT_VAULT_ADDR  = https://enterprise-vault.automation-...
-#   TFC_VAULT_NAMESPACE     = eelab/Catalyst
-#   TFC_VAULT_PLAN_ROLE     = tfc-role
-#   TFC_VAULT_PROVIDER_AUTH = true
-vault_address     = "https://enterprise-vault.automation-18fdda76ef7730b16bdb4cb5e693c1eb-0000.us-south.containers.appdomain.cloud"
-vault_namespace   = "eelab/Catalyst"
-vault_mount_path  = "kv"
-vault_secret_path = "terraform"   # kv/terraform holds public_key + ibm_api_key
+# ── HCP Vault Cluster – TFC Dynamic Credentials ──────────────────
+# These variables are managed in HCP Terraform workspace variables UI.
+# Do NOT set them here to avoid conflicts.
+#
+# Set the following as Terraform Variables in TFC UI:
+#   vault_address     = https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200
+#   vault_namespace   = admin
+#   vault_mount_path  = kv
+#   vault_secret_path = IBM_cloud
+#
+# Set the following as Environment Variables in TFC UI:
+#   TFC_VAULT_PROVIDER_AUTH   = true
+#   TFC_DEFAULT_VAULT_ADDR    = https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200
+#   TFC_VAULT_NAMESPACE       = admin
+#   TFC_VAULT_PLAN_ROLE       = tfc-role
+#   TFC_VAULT_APPLY_ROLE      = tfc-role
