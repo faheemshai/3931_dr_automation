@@ -50,6 +50,18 @@ variable "subnet_id_us_south" {
   type = string
 }
 
+# ── us-south VPC default security group ──────────────────────────
+variable "vpc_default_sg_id_us_south" {
+  description = <<-EOT
+    Default security group ID of the VPC in us-south.
+    Packer adds its SSH allow rule to this group so it takes effect.
+    Get it: ibmcloud is vpc <vpc-id> --output json | jq -r '.default_security_group.id'
+    The VPC ID is printed in the packer build output as "VPC ID: r006-..."
+  EOT
+  type    = string
+  default = ""
+}
+
 # ── eu-de subnet ─────────────────────────────────────────────────
 variable "subnet_id_eu_de" {
   description = <<-EOT

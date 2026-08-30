@@ -61,20 +61,20 @@ source "ibmcloud-vpc" "rhel92_us_south" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
+  # ED25519 matches what IBM Cloud RHEL 9 expects for key injection
+  ssh_key_type        = "ed25519"
 
   image_name = "${local.image_name}-us-south"
 
   communicator = "ssh"
   ssh_username = "root"
   ssh_port     = 22
-  ssh_timeout  = "15m"
+  ssh_timeout  = "45m"
 
-  timeout = "30m"
+  timeout = "60m"
 }
 
 # ── eu-de (DR) ───────────────────────────────────────────────────
-# Skipped automatically when subnet_id_eu_de is left empty ("").
-# Fill in the subnet ID and set build_eu_de = true to include it.
 source "ibmcloud-vpc" "rhel92_eu_de" {
   api_key = var.ibm_api_key
 
@@ -87,15 +87,16 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
+  ssh_key_type        = "ed25519"
 
   image_name = "${local.image_name}-eu-de"
 
   communicator = "ssh"
   ssh_username = "root"
   ssh_port     = 22
-  ssh_timeout  = "15m"
+  ssh_timeout  = "45m"
 
-  timeout = "30m"
+  timeout = "60m"
 }
 
 # ═══════════════════════════════════════════════════════════════
