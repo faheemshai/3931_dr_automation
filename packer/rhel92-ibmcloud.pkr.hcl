@@ -129,6 +129,25 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
 build {
   name = "rhel92-golden"
 
+  # ── HCP Packer Registry ──────────────────────────────────────
+  # Publishes version metadata to the HCP Packer portal so the
+  # bucket shows Newest version, Published date, and Fingerprint.
+  # Requires env vars at build time (never hard-coded):
+  #   export HCP_CLIENT_ID="..."
+  #   export HCP_CLIENT_SECRET="..."
+  #   export HCP_ORGANIZATION_ID="..."   # from portal URL
+  #   export HCP_PROJECT_ID="..."        # from portal URL
+  hcp_packer_registry {
+    bucket_name   = "rhel92-golden"
+    description   = "Hardened RHEL 9.2 golden image for LAB-3931 DR pipeline"
+    bucket_labels = {
+      "lab"        = "lab-3931"
+      "managed-by" = "packer"
+      "os"         = "rhel-9.2"
+      "region"     = "us-south"
+    }
+  }
+
   # Include eu-de source only when build_eu_de = true
   sources = var.build_eu_de ? [
     "source.ibmcloud-vpc.rhel92_us_south",
