@@ -1,62 +1,62 @@
 # ---------------------------------------------------------------
 # packer/student.pkrvars.hcl.example
 #
-# COPY this file to student.pkrvars.hcl and fill in your values.
+# COPY to student.pkrvars.hcl and fill in your values.
 #   cp student.pkrvars.hcl.example student.pkrvars.hcl
 #
 # student.pkrvars.hcl is gitignored — NEVER commit it.
 #
-# ── HCP Packer authentication (set in your shell, NOT here) ──────
-# HCP Packer uses a service principal. Export these env vars before
-# running packer build — they are picked up automatically:
+# ── HCP Packer authentication — set in your shell, NOT here ──────
 #
-#   export HCP_CLIENT_ID="d74d3df1cded0965ef6b99ea4c3a2093"
-#   export HCP_CLIENT_SECRET="<your-client-secret>"
+#   Retrieve from Vault and export before every packer build:
 #
-# The client secret must be kept private. Store it in Vault:
-#   vault kv put -namespace=admin -mount=kv HCP_packer \
-#     client_id="d74d3df1cded0965ef6b99ea4c3a2093" \
-#     client_secret="<your-client-secret>"
+#   export HCP_CLIENT_ID=$(vault kv get -namespace=admin \
+#     -mount=kv -field=client_id HCP_packer)
+#   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin \
+#     -mount=kv -field=client_secret HCP_packer)
 #
-# Then export at build time:
-#   export HCP_CLIENT_ID=$(vault kv get -field=client_id    kv/HCP_packer)
-#   export HCP_CLIENT_SECRET=$(vault kv get -field=client_secret kv/HCP_packer)
+# ── IBM Cloud API key — also from Vault ──────────────────────────
 #
-# ── IBM Cloud API key ─────────────────────────────────────────────
-# Retrieve from Vault, export, and reference below:
-#   export IBM_API_KEY=$(vault kv get -field=ibm_api_key kv/IBM_cloud)
+#   export IBM_API_KEY=$(vault kv get -namespace=admin \
+#     -mount=kv -field=ibm_api_key IBM_cloud)
 #
-# ── Full build command ────────────────────────────────────────────
+# ── Full build workflow ───────────────────────────────────────────
+#
 #   cd packer/
+#   # export the three env vars above
 #   packer init .
-#   packer build -var-file=student.pkrvars.hcl ./rhel92-ibmcloud.pkr.hcl
+#   packer validate -var-file=student.pkrvars.hcl .
+#   packer build   -var-file=student.pkrvars.hcl .
+#
+# ── After build ───────────────────────────────────────────────────
+#   Image IDs are written to packer-manifest.json (gitignored).
+#   Copy them into terraform/terraform.tfvars for Task 2:
+#     golden_image_id_us_south = "..."
+#     golden_image_id_eu_de    = "..."
 # ---------------------------------------------------------------
 
 # ── Student ID ───────────────────────────────────────────────────
-student_id = "student-XX"   # ← replace XX with your assigned number
+student_id = "student-XX"    # ← replace XX with your assigned number
 
 # ── IBM Cloud API key ────────────────────────────────────────────
-# Paste your short-lived key here — or use the env-var approach above.
-ibm_api_key = ""            # ← e.g. from: vault kv get -field=ibm_api_key kv/IBM_cloud
+# Leave empty to use the IBM_API_KEY env var (recommended):
+ibm_api_key = ""
 
 # ── IBM Cloud resource group ID ──────────────────────────────────
-# Retrieve: ibmcloud resource group <name> --id
-ibm_resource_group_id = ""  # ← e.g. "abc123def456abc123def456abc123de"
+# ibmcloud resource group <name> --id
+ibm_resource_group_id = ""   # ← e.g. "abc123def456abc123def456abc123de"
 
-# ── Base RHEL 9.2 image name ─────────────────────────────────────
-# Confirm: ibmcloud is images --visibility public | grep -i rhel-9-2
+# ── Base RHEL 9.2 image ──────────────────────────────────────────
+# ibmcloud is images --visibility public | grep -i rhel-9-2
 base_image_name = "ibm-redhat-9-2-minimal-amd64-9"
 
 # ── Image name prefix ────────────────────────────────────────────
-# Timestamp is appended automatically: rhel92-golden-20260601-1430-us-south
 image_name_prefix = "rhel92-golden"
 
-# ── Build VPC names ──────────────────────────────────────────────
-# Pre-created by the lab instructor. Each must have a subnet + public
-# gateway in the target zone so dnf can reach the internet during the build.
-build_vpc_name_us_south = "packer-build-vpc-us-south"
-build_vpc_name_eu_de    = "packer-build-vpc-eu-de"
-
-# ── Zone overrides (defaults match lab environment) ──────────────
-us_south_zone = "us-south-1"
-eu_de_zone    = "eu-de-2"
+# ── Build subnet IDs ─────────────────────────────────────────────
+# These subnets must already exist with a public gateway attached.
+# The lab instructor pre-creates them. Retrieve IDs with:
+#   ibmcloud is subnets | grep us-south
+#   ibmcloud is subnets | grep eu-de
+subnet_id_us_south = ""      # ← e.g. "0717-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+subnet_id_eu_de    = ""      # ← e.g. "02c7-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"

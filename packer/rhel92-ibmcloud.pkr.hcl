@@ -2,37 +2,29 @@
 # packer/rhel92-ibmcloud.pkr.hcl
 #
 # LAB-3931 — Automating Disaster Recovery
-# Builds a hardened RHEL 9.2 golden image and pushes it to IBM Cloud
-# Image Registry in TWO regions simultaneously:
+# Builds a hardened RHEL 9.2 golden image and registers it in HCP
+# Packer, pushing to IBM Cloud Image Registry in TWO regions:
 #   • us-south  (primary)
 #   • eu-de     (DR)
 #
-# Builds are tracked in HCP Packer SaaS — every run creates a new
-# image version in the "rhel92-golden" channel, available to
-# Terraform via the HCP Packer data source in Task 2.
-#
-# HCP Packer authentication uses service principal env vars —
-# NEVER hard-coded in this file:
-#   export HCP_CLIENT_ID="<your-client-id>"
-#   export HCP_CLIENT_SECRET="<your-client-secret>"
+# HCP Packer authentication — env vars only, never in this file:
+#   export HCP_CLIENT_ID="..."
+#   export HCP_CLIENT_SECRET="..."
 #
 # Usage:
 #   cd packer/
 #   packer init .
-#   packer build -var-file=student.pkrvars.hcl ./rhel92-ibmcloud.pkr.hcl
+#   packer validate -var-file=student.pkrvars.hcl .
+#   packer build   -var-file=student.pkrvars.hcl .
 #
-# After the build, note the two IBM Cloud image IDs from the
-# packer-manifest.json output — supply them as Terraform variables
-# in Task 2:
-#   golden_image_id_us_south = "<us-south image ID>"
-#   golden_image_id_eu_de    = "<eu-de image ID>"
-#
-# Fallback: if the build times out at 8 minutes, open the HCP Packer
-# registry UI, navigate to the "rhel92-golden" bucket, and copy the
-# pre-built image IDs for us-south and eu-de from the latest iteration.
+# After the build completes, image IDs appear in packer-manifest.json
+# and in the HCP Packer registry UI under the "rhel92-golden" bucket.
+# Supply them as Terraform variables in Task 2:
+#   golden_image_id_us_south = "..."
+#   golden_image_id_eu_de    = "..."
 # ---------------------------------------------------------------
 
-# ── Required plugins ─────────────────────────────────────────────
+# ── Required plugin ──────────────────────────────────────────────
 packer {
   required_plugins {
     ibmcloud = {
@@ -44,61 +36,77 @@ packer {
 
 # ── Local values ─────────────────────────────────────────────────
 locals {
-  # Timestamp appended to every image name — makes each build immutable
-  # and uniquely identifiable in IBM Cloud Image Registry.
-  timestamp  = formatdate("YYYYMMDD-hhmm", timestamp())
+  # Compact timestamp → unique, sortable image name every build
+  timestamp  = regex_replace(timestamp(), "[- TZ:]", "")
   image_name = "${var.image_name_prefix}-${local.timestamp}"
 }
 
 # ═══════════════════════════════════════════════════════════════
-# SOURCE BLOCKS
-# Two identical sources — one per region.
-# Packer builds them in parallel, producing one image per region.
+# SOURCE BLOCKS — one per region, built in parallel
 # ═══════════════════════════════════════════════════════════════
 
-# ── us-south (primary region) ────────────────────────────────────
+# ── us-south (primary) ───────────────────────────────────────────
 source "ibmcloud-vpc" "rhel92_us_south" {
-  # IBM Cloud API key — read from var (supplied via student.pkrvars.hcl,
-  # which is gitignored). Never hard-coded here.
+  # Auth — IBM Cloud API key (from student.pkrvars.hcl, gitignored)
   api_key = var.ibm_api_key
 
+  # Target region
   region = "us-south"
-  zone   = var.us_south_zone    # default: us-south-1
 
-  # IBM Cloud stock RHEL 9.2 minimal image as the build base.
-  # Confirm the exact name: ibmcloud is images --visibility public | grep rhel-9-2
-  base_image_name = var.base_image_name
+  # Subnet in us-south where the temporary build VSI is created.
+  # The subnet must have a public gateway so dnf can reach the internet.
+  # Get the ID: ibmcloud is subnets --zone us-south-1 | grep <your-subnet>
+  subnet_id = var.subnet_id_us_south
 
-  # Small profile for the temporary build VSI only — not for lab workloads.
-  profile  = "cx2-2x4"    # Compute · 2 vCPU / 4 GB
-  vpc_name = var.build_vpc_name_us_south
+  # Resource group for the output image
+  resource_group_id = var.ibm_resource_group_id
 
+  # No extra security group — the default VPC security group is used.
+  # Set to your build security group ID if your account requires it.
+  security_group_id = ""
+
+  # Base image: IBM Cloud stock RHEL 9.2
+  vsi_base_image_name = var.base_image_name   # ibm-redhat-9-2-minimal-amd64-9
+
+  # Temporary build VSI profile — small and fast; not the lab workload profile
+  vsi_profile   = "cx2-2x4"
+  vsi_interface = "public"
+
+  # Output image name in IBM Cloud Image Registry
+  image_name = "${local.image_name}-us-south"
+
+  # SSH communicator settings
   communicator = "ssh"
   ssh_username = "root"
+  ssh_port     = 22
+  ssh_timeout  = "15m"
 
-  # Output image stored in IBM Cloud Image Registry us-south
-  image_name        = "${local.image_name}-us-south"
-  resource_group_id = var.ibm_resource_group_id
+  # Overall build timeout (dnf update + package install can take ~15 min)
+  timeout = "30m"
 }
 
-# ── eu-de (DR region) ────────────────────────────────────────────
+# ── eu-de (DR) ───────────────────────────────────────────────────
 source "ibmcloud-vpc" "rhel92_eu_de" {
   api_key = var.ibm_api_key
 
   region = "eu-de"
-  zone   = var.eu_de_zone    # default: eu-de-2
 
-  base_image_name = var.base_image_name
+  subnet_id         = var.subnet_id_eu_de
+  resource_group_id = var.ibm_resource_group_id
+  security_group_id = ""
 
-  profile  = "cx2-2x4"
-  vpc_name = var.build_vpc_name_eu_de
+  vsi_base_image_name = var.base_image_name
+  vsi_profile         = "cx2-2x4"
+  vsi_interface       = "public"
+
+  image_name = "${local.image_name}-eu-de"
 
   communicator = "ssh"
   ssh_username = "root"
+  ssh_port     = 22
+  ssh_timeout  = "15m"
 
-  # Output image stored in IBM Cloud Image Registry eu-de
-  image_name        = "${local.image_name}-eu-de"
-  resource_group_id = var.ibm_resource_group_id
+  timeout = "30m"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -113,28 +121,23 @@ build {
   ]
 
   # ── HCP Packer registry ──────────────────────────────────────
-  # Tracks every build as a versioned iteration in the HCP Packer
-  # SaaS registry under the "rhel92-golden" bucket.
-  #
-  # Authentication is via environment variables only:
-  #   HCP_CLIENT_ID     — HCP service principal client ID
-  #   HCP_CLIENT_SECRET — HCP service principal client secret
-  # Set these in your shell before running packer build.
-  # They are NEVER written to this file or any committed file.
+  # Tracks every run as a versioned iteration in the "rhel92-golden"
+  # bucket. Credentials come from HCP_CLIENT_ID / HCP_CLIENT_SECRET
+  # env vars — never written to any file.
   hcp_packer_registry {
     bucket_name = "rhel92-golden"
     description = "Hardened RHEL 9.2 golden image for LAB-3931 DR pipeline"
 
     bucket_labels = {
-      "os"          = "rhel-9.2"
-      "lab"         = "3931"
-      "managed-by"  = "packer"
+      "os"         = "rhel-9.2"
+      "lab"        = "lab-3931"
+      "managed-by" = "packer"
     }
 
     build_labels = {
-      "build-time"   = local.timestamp
-      "student-id"   = var.student_id
-      "base-image"   = var.base_image_name
+      "build-time"  = local.timestamp
+      "student-id"  = var.student_id
+      "base-image"  = var.base_image_name
     }
   }
 
@@ -146,7 +149,7 @@ build {
 
   # ── Step 2: Run hardening ────────────────────────────────────
   provisioner "shell" {
-    execute_command = "chmod +x '{{ .Path }}'; {{ .Vars }} bash '{{ .Path }}'"
+    execute_command = "{{.Vars}} bash '{{.Path}}'"
     inline = [
       "chmod +x /tmp/harden-rhel92.sh",
       "/tmp/harden-rhel92.sh",
@@ -154,8 +157,9 @@ build {
     timeout = "20m"
   }
 
-  # ── Step 3: Stamp build metadata into the image ──────────────
+  # ── Step 3: Stamp build metadata ────────────────────────────
   provisioner "shell" {
+    execute_command = "{{.Vars}} bash '{{.Path}}'"
     inline = [
       "echo 'LAB_BUILD_IMAGE=${local.image_name}' >> /etc/os-release",
       "echo 'LAB_BUILD_DATE=${local.timestamp}'   >> /etc/os-release",
@@ -163,12 +167,12 @@ build {
     ]
   }
 
-  # ── Step 4: Final cleanup before image capture ───────────────
+  # ── Step 4: Pre-capture cleanup ─────────────────────────────
   provisioner "shell" {
+    execute_command = "{{.Vars}} bash '{{.Path}}'"
     inline = [
-      # Remove SSH host keys — regenerate automatically on each VSI's first boot
+      # SSH host keys regenerate on each VSI's first boot
       "rm -f /etc/ssh/ssh_host_*",
-      # Clear package cache, temp files, bash history
       "dnf clean all",
       "rm -rf /var/tmp/*",
       "truncate -s 0 /root/.bash_history",
@@ -176,11 +180,9 @@ build {
     ]
   }
 
-  # ── Post-processor: write local manifest ─────────────────────
-  # Writes packer-manifest.json containing the image IDs for both
-  # regions. Read this file after the build to get the IDs for
-  # the Terraform golden_image_id_us_south / golden_image_id_eu_de
-  # variables in Task 2.
+  # ── Post-processor: local manifest ──────────────────────────
+  # Writes packer-manifest.json with artifact IDs for both regions.
+  # Use these IDs for the Terraform variables in Task 2.
   post-processor "manifest" {
     output     = "${path.root}/packer-manifest.json"
     strip_path = true
