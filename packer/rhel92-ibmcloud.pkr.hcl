@@ -40,6 +40,9 @@ locals {
   timestamp  = regex_replace(timestamp(), "[- TZ:]", "")
   image_name = "${var.image_name_prefix}-${local.timestamp}"
 
+  # Human-readable build date for HCP Packer portal labels
+  build_date = formatdate("YYYY-MM-DD", timestamp())
+
   # cloud-init user-data: fetch SSH keys from IBM Cloud metadata service
   # and write them to authorized_keys immediately at first boot.
   # This forces key injection before sshd starts — fixes the RHEL 9
@@ -140,11 +143,49 @@ build {
   hcp_packer_registry {
     bucket_name   = "rhel92-golden"
     description   = "Hardened RHEL 9.2 golden image for LAB-3931 DR pipeline"
+
+    # bucket_labels appear on the bucket overview page (permanent tags)
     bucket_labels = {
       "lab"        = "lab-3931"
       "managed-by" = "packer"
       "os"         = "rhel-9.2"
-      "region"     = "us-south"
+      "base-image" = var.base_image_name
+      "student-id" = var.student_id
+    }
+
+    # build_labels appear on EACH VERSION in the portal — this is where
+    # the hardening evidence shows. Every key/value is visible in the
+    # "Version details" tab and exportable as a data source in Terraform.
+    build_labels = {
+      # ── Identity ────────────────────────────────────────────
+      "build-date"        = local.build_date
+      "build-timestamp"   = local.timestamp
+      "image-name"        = local.image_name
+
+      # ── Hardening checklist ─────────────────────────────────
+      # Each entry maps to a numbered step in harden-rhel92.sh
+      "hardening-step-1"  = "system-packages-updated"
+      "hardening-step-2"  = "nginx-jq-openssl-curl-installed"
+      "hardening-step-3"  = "unnecessary-services-disabled"
+      "hardening-step-4"  = "cis-sysctl-kernel-hardening-applied"
+      "hardening-step-5"  = "selinux-set-to-enforcing"
+      "hardening-step-6"  = "ssh-hardened-no-password-auth"
+      "hardening-step-7"  = "firewalld-drop-zone-ssh-http-https-only"
+      "hardening-step-8"  = "audit-chrony-rsyslog-enabled-at-boot"
+
+      # ── Compliance alignment ─────────────────────────────────
+      "cis-benchmark"     = "rhel9-level-1"
+      "ssh-root-login"    = "without-password"
+      "ipv6"              = "disabled"
+      "selinux-policy"    = "targeted"
+      "password-auth"     = "disabled"
+      "x11-forwarding"    = "disabled"
+
+      # ── DR pipeline context ──────────────────────────────────
+      "dr-lab"            = "lab-3931"
+      "primary-region"    = "us-south"
+      "dr-region"         = "eu-de"
+      "pipeline-stage"    = "golden-image"
     }
   }
 
