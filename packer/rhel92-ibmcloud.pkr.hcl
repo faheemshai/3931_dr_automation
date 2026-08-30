@@ -61,8 +61,8 @@ source "ibmcloud-vpc" "rhel92_us_south" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
-  # ED25519 matches what IBM Cloud RHEL 9 expects for key injection
-  ssh_key_type        = "ed25519"
+  # RSA is the only key type IBM Cloud VPC cloud-init injects reliably on RHEL 9
+  ssh_key_type        = "rsa"
 
   image_name = "${local.image_name}-us-south"
 
@@ -87,7 +87,7 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
-  ssh_key_type        = "ed25519"
+  ssh_key_type        = "rsa"
 
   image_name = "${local.image_name}-eu-de"
 

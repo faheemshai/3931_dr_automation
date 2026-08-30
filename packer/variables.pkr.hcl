@@ -29,9 +29,9 @@ variable "image_name_prefix" {
 
 # ── Base image ───────────────────────────────────────────────────
 variable "base_image_name" {
-  description = "IBM Cloud stock RHEL 9.2 image name. Confirm: ibmcloud is images --visibility public | grep -i rhel-9-2"
+  description = "IBM Cloud RHEL 9 image name. Use non-minimal for full cloud-init VPC key injection support."
   type        = string
-  default     = "ibm-redhat-9-2-minimal-amd64-9"
+  default     = "ibm-redhat-9-4-amd64-5"
 }
 
 # ── IBM Cloud resource group ──────────────────────────────────────
