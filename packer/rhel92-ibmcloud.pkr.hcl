@@ -132,63 +132,6 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
 build {
   name = "rhel92-golden"
 
-  # ── HCP Packer Registry ──────────────────────────────────────
-  # Publishes version metadata to the HCP Packer portal so the
-  # bucket shows Newest version, Published date, and Fingerprint.
-  # Requires env vars at build time (never hard-coded):
-  #   export HCP_CLIENT_ID="..."
-  #   export HCP_CLIENT_SECRET="..."
-  #   export HCP_ORGANIZATION_ID="..."   # from portal URL
-  #   export HCP_PROJECT_ID="..."        # from portal URL
-  hcp_packer_registry {
-    bucket_name   = "rhel92-golden"
-    description   = "Hardened RHEL 9.2 golden image for LAB-3931 DR pipeline"
-
-    # bucket_labels appear on the bucket overview page (permanent tags)
-    bucket_labels = {
-      "lab"        = "lab-3931"
-      "managed-by" = "packer"
-      "os"         = "rhel-9.2"
-      "base-image" = var.base_image_name
-      "student-id" = var.student_id
-    }
-
-    # build_labels appear on EACH VERSION in the portal — this is where
-    # the hardening evidence shows. Every key/value is visible in the
-    # "Version details" tab and exportable as a data source in Terraform.
-    build_labels = {
-      # ── Identity ────────────────────────────────────────────
-      "build-date"        = local.build_date
-      "build-timestamp"   = local.timestamp
-      "image-name"        = local.image_name
-
-      # ── Hardening checklist ─────────────────────────────────
-      # Each entry maps to a numbered step in harden-rhel92.sh
-      "hardening-step-1"  = "system-packages-updated"
-      "hardening-step-2"  = "nginx-jq-openssl-curl-installed"
-      "hardening-step-3"  = "unnecessary-services-disabled"
-      "hardening-step-4"  = "cis-sysctl-kernel-hardening-applied"
-      "hardening-step-5"  = "selinux-set-to-enforcing"
-      "hardening-step-6"  = "ssh-hardened-no-password-auth"
-      "hardening-step-7"  = "firewalld-drop-zone-ssh-http-https-only"
-      "hardening-step-8"  = "audit-chrony-rsyslog-enabled-at-boot"
-
-      # ── Compliance alignment ─────────────────────────────────
-      "cis-benchmark"     = "rhel9-level-1"
-      "ssh-root-login"    = "without-password"
-      "ipv6"              = "disabled"
-      "selinux-policy"    = "targeted"
-      "password-auth"     = "disabled"
-      "x11-forwarding"    = "disabled"
-
-      # ── DR pipeline context ──────────────────────────────────
-      "dr-lab"            = "lab-3931"
-      "primary-region"    = "us-south"
-      "dr-region"         = "eu-de"
-      "pipeline-stage"    = "golden-image"
-    }
-  }
-
   # Include eu-de source only when build_eu_de = true
   sources = var.build_eu_de ? [
     "source.ibmcloud-vpc.rhel92_us_south",
