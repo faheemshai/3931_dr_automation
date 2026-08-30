@@ -25,25 +25,12 @@
 # Supply them as Terraform variables in Task 2.
 # ---------------------------------------------------------------
 
-# ── Required plugin + HCP Packer registry ────────────────────────
+# ── Required plugin ──────────────────────────────────────────────
 packer {
   required_plugins {
     ibmcloud = {
       source  = "github.com/IBM/ibmcloud"
       version = ">= 3.0.0"
-    }
-  }
-
-  # Top-level HCP Packer registry block (required since Packer 1.12.1).
-  # Auth via HCP_CLIENT_ID / HCP_CLIENT_SECRET env vars — never in code.
-  hcp_packer_registry {
-    bucket_name = "rhel92-golden"
-    description = "Hardened RHEL 9.2 golden image for LAB-3931 DR pipeline"
-
-    bucket_labels = {
-      "os"         = "rhel-9.2"
-      "lab"        = "lab-3931"
-      "managed-by" = "packer"
     }
   }
 }
