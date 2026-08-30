@@ -56,6 +56,15 @@ variable "subnet_id_eu_de" {
     Subnet ID in eu-de for the temporary Packer build VSI.
     Same public gateway requirement as subnet_id_us_south.
     Get IDs: ibmcloud is subnets | grep eu-de
+    Leave empty ("") when build_eu_de = false.
   EOT
-  type = string
+  type    = string
+  default = ""
+}
+
+# ── Region control ───────────────────────────────────────────────
+variable "build_eu_de" {
+  description = "Set to true to build in eu-de as well as us-south. Requires subnet_id_eu_de to be set."
+  type        = bool
+  default     = false
 }
