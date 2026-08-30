@@ -47,17 +47,18 @@ locals {
   cloud_init_user_data = <<-USERDATA
     #!/bin/bash
     set -e
-    mkdir -p /root/.ssh
-    chmod 700 /root/.ssh
+    mkdir -p /home/vpcuser/.ssh
+    chmod 700 /home/vpcuser/.ssh
     # Fetch all SSH keys registered to this VSI from the metadata service
     KEYS=$(curl -sf -H "Metadata-Flavor: ibm" \
       "http://169.254.169.254/metadata/v1/keys?version=2022-03-01" \
       | python3 -c "import sys,json; [print(k['public_key']) for k in json.load(sys.stdin).get('keys',[])]" 2>/dev/null || true)
     if [ -n "$KEYS" ]; then
-      echo "$KEYS" >> /root/.ssh/authorized_keys
+      echo "$KEYS" >> /home/vpcuser/.ssh/authorized_keys
     fi
-    chmod 600 /root/.ssh/authorized_keys
-    restorecon -r /root/.ssh 2>/dev/null || true
+    chmod 600 /home/vpcuser/.ssh/authorized_keys
+    chown -R vpcuser:vpcuser /home/vpcuser/.ssh
+    restorecon -r /home/vpcuser/.ssh 2>/dev/null || true
   USERDATA
 }
 
@@ -88,7 +89,7 @@ source "ibmcloud-vpc" "rhel92_us_south" {
   image_name = "${local.image_name}-us-south"
 
   communicator = "ssh"
-  ssh_username = "root"
+  ssh_username = "vpcuser"
   ssh_port     = 22
   ssh_timeout  = "45m"
 
@@ -114,7 +115,7 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
   image_name = "${local.image_name}-eu-de"
 
   communicator = "ssh"
-  ssh_username = "root"
+  ssh_username = "vpcuser"
   ssh_port     = 22
   ssh_timeout  = "45m"
 
@@ -144,32 +145,32 @@ build {
 
   # ── Step 2: Run hardening ────────────────────────────────────
   provisioner "shell" {
-    execute_command = "{{.Vars}} bash '{{.Path}}'"
+    execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
     inline = [
       "chmod +x /tmp/harden-rhel92.sh",
-      "/tmp/harden-rhel92.sh",
+      "sudo /tmp/harden-rhel92.sh",
     ]
     timeout = "20m"
   }
 
   # ── Step 3: Stamp build metadata ────────────────────────────
   provisioner "shell" {
-    execute_command = "{{.Vars}} bash '{{.Path}}'"
+    execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
     inline = [
-      "echo 'LAB_BUILD_IMAGE=${local.image_name}' >> /etc/os-release",
-      "echo 'LAB_BUILD_DATE=${local.timestamp}'   >> /etc/os-release",
-      "echo 'LAB_STUDENT_ID=${var.student_id}'    >> /etc/os-release",
+      "sudo bash -c \"echo 'LAB_BUILD_IMAGE=${local.image_name}' >> /etc/os-release\"",
+      "sudo bash -c \"echo 'LAB_BUILD_DATE=${local.timestamp}'   >> /etc/os-release\"",
+      "sudo bash -c \"echo 'LAB_STUDENT_ID=${var.student_id}'    >> /etc/os-release\"",
     ]
   }
 
   # ── Step 4: Pre-capture cleanup ─────────────────────────────
   provisioner "shell" {
-    execute_command = "{{.Vars}} bash '{{.Path}}'"
+    execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
     inline = [
-      "rm -f /etc/ssh/ssh_host_*",
-      "dnf clean all",
-      "rm -rf /var/tmp/*",
-      "truncate -s 0 /root/.bash_history",
+      "sudo rm -f /etc/ssh/ssh_host_*",
+      "sudo dnf clean all",
+      "sudo rm -rf /var/tmp/*",
+      "sudo truncate -s 0 /root/.bash_history",
       "sync",
     ]
   }

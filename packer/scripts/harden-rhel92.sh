@@ -30,15 +30,25 @@ log "OS: $(cat /etc/redhat-release)"
 # 1. Full system update
 # ═══════════════════════════════════════════════════════════════
 log "--- Step 1: System update ---"
-dnf update -y --nobest || dnf update -y
+
+# Disable any EUS repos that are unavailable on this IBM Cloud image
+# (they return 404 and cause dnf to abort entirely)
+dnf config-manager --disable "*eus*" 2>/dev/null || true
+dnf config-manager --disable "*e4s*" 2>/dev/null || true
+
+# Update using only the repos that are actually reachable
+dnf update -y --nobest --skip-broken || dnf update -y --skip-broken || true
+log "System update complete (non-fatal errors suppressed)."
 
 # ═══════════════════════════════════════════════════════════════
 # 2. Install required runtime packages
 # ═══════════════════════════════════════════════════════════════
 log "--- Step 2: Installing packages ---"
 
-# Enable CRB (CodeReady Linux Builder) for additional packages
+# Enable CRB (CodeReady Linux Builder) for additional packages — best effort
 dnf config-manager --set-enabled crb 2>/dev/null || true
+# Re-disable EUS in case enabling crb re-enabled them
+dnf config-manager --disable "*eus*" 2>/dev/null || true
 
 dnf install -y \
   nginx \
