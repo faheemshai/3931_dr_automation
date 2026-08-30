@@ -39,6 +39,26 @@ packer {
 locals {
   timestamp  = regex_replace(timestamp(), "[- TZ:]", "")
   image_name = "${var.image_name_prefix}-${local.timestamp}"
+
+  # cloud-init user-data: fetch SSH keys from IBM Cloud metadata service
+  # and write them to authorized_keys immediately at first boot.
+  # This forces key injection before sshd starts — fixes the RHEL 9
+  # minimal image timing race where cloud-init finishes too late.
+  cloud_init_user_data = <<-USERDATA
+    #!/bin/bash
+    set -e
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+    # Fetch all SSH keys registered to this VSI from the metadata service
+    KEYS=$(curl -sf -H "Metadata-Flavor: ibm" \
+      "http://169.254.169.254/metadata/v1/keys?version=2022-03-01" \
+      | python3 -c "import sys,json; [print(k['public_key']) for k in json.load(sys.stdin).get('keys',[])]" 2>/dev/null || true)
+    if [ -n "$KEYS" ]; then
+      echo "$KEYS" >> /root/.ssh/authorized_keys
+    fi
+    chmod 600 /root/.ssh/authorized_keys
+    restorecon -r /root/.ssh 2>/dev/null || true
+  USERDATA
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -49,10 +69,7 @@ locals {
 source "ibmcloud-vpc" "rhel92_us_south" {
   api_key = var.ibm_api_key
 
-  region = "us-south"
-
-  # Subnet in us-south with a public gateway for dnf internet access.
-  # ibmcloud is subnets | grep us-south
+  region    = "us-south"
   subnet_id = var.subnet_id_us_south
 
   resource_group_id = var.ibm_resource_group_id
@@ -61,19 +78,19 @@ source "ibmcloud-vpc" "rhel92_us_south" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
+  ssh_key_type        = "rsa"
 
-  # Use a pre-existing IBM Cloud SSH key instead of a throwaway generated one.
-  # This guarantees the public key IBM Cloud injects matches our private key.
-  # Set existing_ssh_key_id in student.pkrvars.hcl to your IBM Cloud SSH key ID.
-  existing_ssh_key_id = var.existing_ssh_key_id_us_south
+  # Inject the Packer-generated public key via user-data cloud-init.
+  # This writes authorized_keys BEFORE sshd starts, bypassing the
+  # IBM Cloud metadata key-injection timing issue on RHEL 9 minimal.
+  vsi_user_data = local.cloud_init_user_data
 
   image_name = "${local.image_name}-us-south"
 
-  communicator        = "ssh"
-  ssh_username        = "root"
-  ssh_port            = 22
-  ssh_timeout         = "45m"
-  ssh_private_key_file = var.ssh_private_key_file
+  communicator = "ssh"
+  ssh_username = "root"
+  ssh_port     = 22
+  ssh_timeout  = "45m"
 
   timeout = "60m"
 }
@@ -82,24 +99,24 @@ source "ibmcloud-vpc" "rhel92_us_south" {
 source "ibmcloud-vpc" "rhel92_eu_de" {
   api_key = var.ibm_api_key
 
-  region = "eu-de"
+  region    = "eu-de"
+  subnet_id = var.subnet_id_eu_de != "" ? var.subnet_id_eu_de : var.subnet_id_us_south
 
-  subnet_id         = var.subnet_id_eu_de != "" ? var.subnet_id_eu_de : var.subnet_id_us_south
   resource_group_id = var.ibm_resource_group_id
   security_group_id = ""
 
-  vsi_base_image_name  = var.base_image_name
-  vsi_profile          = "cx2-2x4"
-  vsi_interface        = "public"
-  existing_ssh_key_id  = var.existing_ssh_key_id_eu_de != "" ? var.existing_ssh_key_id_eu_de : var.existing_ssh_key_id_us_south
+  vsi_base_image_name = var.base_image_name
+  vsi_profile         = "cx2-2x4"
+  vsi_interface       = "public"
+  ssh_key_type        = "rsa"
+  vsi_user_data       = local.cloud_init_user_data
 
   image_name = "${local.image_name}-eu-de"
 
-  communicator         = "ssh"
-  ssh_username         = "root"
-  ssh_port             = 22
-  ssh_timeout          = "45m"
-  ssh_private_key_file = var.ssh_private_key_file
+  communicator = "ssh"
+  ssh_username = "root"
+  ssh_port     = 22
+  ssh_timeout  = "45m"
 
   timeout = "60m"
 }
