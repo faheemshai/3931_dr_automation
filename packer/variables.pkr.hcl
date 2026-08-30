@@ -40,6 +40,34 @@ variable "ibm_resource_group_id" {
   type        = string
 }
 
+# ── Pre-existing SSH key (bypasses Packer key generation) ────────
+variable "ssh_private_key_file" {
+  description = <<-EOT
+    Path to the private key whose public key is already registered as an
+    IBM Cloud SSH key. Packer uses this to connect instead of generating
+    a throwaway key. The matching public key must be registered in IBM Cloud
+    and its ID supplied via existing_ssh_key_id_us_south.
+    Example: "/Users/you/.ssh/id_rsa"
+  EOT
+  type = string
+}
+
+variable "existing_ssh_key_id_us_south" {
+  description = <<-EOT
+    IBM Cloud SSH key ID (format: r006-xxxxxxxx-...) already registered in
+    us-south. Packer attaches this key to the build VSI so cloud-init injects
+    the matching public key into /root/.ssh/authorized_keys at first boot.
+    Get it: IBM Cloud Console → VPC Infrastructure → SSH keys → copy the ID.
+  EOT
+  type = string
+}
+
+variable "existing_ssh_key_id_eu_de" {
+  description = "IBM Cloud SSH key ID registered in eu-de. Leave empty to reuse the us-south key ID."
+  type    = string
+  default = ""
+}
+
 # ── us-south subnet ──────────────────────────────────────────────
 variable "subnet_id_us_south" {
   description = <<-EOT
