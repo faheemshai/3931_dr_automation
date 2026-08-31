@@ -1,24 +1,16 @@
 # ---------------------------------------------------------------
-# Root-level variables
-# Every variable used by any child module is declared here so
-# operators have a single place to review and override inputs.
+# variables.tf  –  LAB-3931 DR Automation
 # ---------------------------------------------------------------
 
-# ── IBM Cloud General ────────────────────────────────────────────
-variable "ibm_region" {
-  description = "IBM Cloud region — eu-de (Frankfurt)"
+# ── Project identity ─────────────────────────────────────────────
+variable "project" {
+  description = "Short project name used as prefix in all resource names"
   type        = string
-  default     = "eu-de"
-}
-
-variable "ibm_zone" {
-  description = "IBM Cloud availability zone — eu-de-2"
-  type        = string
-  default     = "eu-de-2"
+  default     = "lab3931"
 }
 
 variable "environment" {
-  description = "Deployment environment label used in resource naming (demo / prod / staging / dev)"
+  description = "Deployment environment label (demo / prod / staging)"
   type        = string
   default     = "demo"
 
@@ -28,99 +20,162 @@ variable "environment" {
   }
 }
 
-variable "project" {
-  description = "Short project name used as a prefix in all resource names"
+# ── PRIMARY region — us-south ────────────────────────────────────
+variable "ibm_region_primary" {
+  description = "IBM Cloud primary region"
   type        = string
-  default     = "ent-demo"
+  default     = "us-south"
+}
+
+variable "ibm_zone_primary" {
+  description = "IBM Cloud primary availability zone"
+  type        = string
+  default     = "us-south-1"
+}
+
+variable "existing_vpc_name_primary" {
+  description = "Existing VPC name in us-south. Leave empty to create new."
+  type        = string
+  default     = "vpc-eelab"
+}
+
+variable "existing_subnet_name_primary" {
+  description = "Existing subnet name in us-south. Leave empty to create new."
+  type        = string
+  default     = "sn-20260511-1"
+}
+
+# ── DR region — eu-de ─────────────────────────────────────────────
+variable "ibm_region_dr" {
+  description = "IBM Cloud DR region"
+  type        = string
+  default     = "eu-de"
+}
+
+variable "ibm_zone_dr" {
+  description = "IBM Cloud DR availability zone"
+  type        = string
+  default     = "eu-de-2"
+}
+
+variable "existing_vpc_name_dr" {
+  description = "Existing VPC name in eu-de. Leave empty to create new."
+  type        = string
+  default     = ""
+}
+
+variable "existing_subnet_name_dr" {
+  description = "Existing subnet name in eu-de. Leave empty to create new."
+  type        = string
+  default     = ""
+}
+
+# ── Golden images from Packer ────────────────────────────────────
+# These are IBM Cloud image names (not IDs) — populated from
+# packer/packer-manifest.json after a successful Packer build.
+# The VSI module does a data lookup by name.
+variable "golden_image_name_us_south" {
+  description = <<-EOT
+    IBM Cloud image name of the Packer-built golden image in us-south.
+    Find in packer/packer-manifest.json → artifact_id, then:
+      ibmcloud is image <id> --output json | jq -r '.name'
+    Example: "rhel92-golden-20260830091707-us-south"
+  EOT
+  type    = string
+  default = "rhel92-golden-20260830091707-us-south"
+}
+
+variable "golden_image_name_eu_de" {
+  description = <<-EOT
+    IBM Cloud image name of the Packer-built golden image in eu-de.
+    Build with: packer build -var build_eu_de=true -var-file=student.pkrvars.hcl .
+    Falls back to us-south image name during Task 1 (single-region build).
+  EOT
+  type    = string
+  default = "rhel92-golden-20260830091707-us-south"
 }
 
 # ── Networking ───────────────────────────────────────────────────
-variable "existing_vpc_name" {
-  description = "Name of an existing IBM Cloud VPC to reuse. Leave empty ('') to create a new one in eu-de."
-  type        = string
-  default     = ""
-}
-
-variable "existing_subnet_name" {
-  description = "Name of an existing subnet to reuse. Leave empty ('') to create a new one in eu-de-2."
-  type        = string
-  default     = ""
-}
-
 variable "subnet_address_count" {
-  description = <<-EOT
-    Number of IPv4 addresses for the new subnet when no existing_subnet_name is set.
-    IBM Cloud auto-carves a valid CIDR from the zone's default address prefix.
-    Must be a power of 2 (256 = /24, 512 = /23, 1024 = /22).
-  EOT
+  description = "IPv4 addresses per subnet (256 = /24). IBM Cloud picks CIDR automatically."
   type        = number
   default     = 256
 }
 
-# ── Security / SSH ────────────────────────────────────────────────
+# ── Security ─────────────────────────────────────────────────────
 variable "ssh_allowed_cidr" {
-  description = "CIDR block allowed to SSH (port 22) to VSI instances — restrict to your bastion / VPN range"
+  description = "CIDR allowed to SSH — restrict to your bastion / VPN CIDR in production"
   type        = string
   default     = "10.0.0.0/8"
 }
 
-# ── Load Balancer / Web App ───────────────────────────────────────
+# ── Application ──────────────────────────────────────────────────
 variable "app_port" {
-  description = "TCP port the web application listens on inside VSI instances"
+  description = "TCP port the app listens on inside the VSI"
   type        = number
   default     = 80
 }
 
 variable "health_check_path" {
-  description = "HTTP path the LB pool member health monitor uses"
+  description = "LB health check HTTP path"
   type        = string
   default     = "/"
 }
 
 # ── VSI ──────────────────────────────────────────────────────────
 variable "vsi_count" {
-  description = "Number of VSI instances to create (fixed, not ASG)"
+  description = "Number of VSIs per region"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "vsi_profile" {
-  description = "IBM Cloud VSI profile (bxf-2x8 = Flex | 2 vCPU / 8 GB RAM)"
+  description = "IBM Cloud VSI profile"
   type        = string
-  default     = "bxf-2x8"
+  default     = "cx2-2x4"
 }
 
-variable "image_name" {
-  description = "IBM Cloud stock image name for the VSI"
-  type        = string
-  default     = "ibm-centos-stream-9-amd64-17"
-}
-
-# ── Vault Enterprise + TFE Dynamic Credentials ───────────────────
-# TFE sets VAULT_TOKEN automatically when TFC_VAULT_PROVIDER_AUTH=true.
-# vault_address and vault_namespace are the only provider arguments needed.
-# vault_jwt_auth_path and vault_jwt_role are NOT needed — TFE handles auth.
-
+# ── Vault Enterprise ─────────────────────────────────────────────
 variable "vault_address" {
-  description = "Vault server URL — matches TFC_DEFAULT_VAULT_ADDR in TFE credential set"
+  description = "Vault server URL"
   type        = string
   default     = "https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200"
 }
 
 variable "vault_namespace" {
-  description = "Vault Enterprise namespace — matches TFC_VAULT_NAMESPACE in TFE credential set"
+  description = "Vault Enterprise namespace"
   type        = string
   default     = "admin"
 }
 
 variable "vault_mount_path" {
-  description = "KV mount name in Vault (e.g. kv)"
+  description = "KV v2 mount name in Vault"
   type        = string
   default     = "kv"
 }
 
 variable "vault_secret_path" {
-  description = "Secret path within the KV mount (e.g. IBM_cloud → full path kv/IBM_cloud)"
+  description = "Secret path within the KV mount"
   type        = string
   default     = "IBM_cloud"
+}
+
+# ── Legacy / backwards compat ────────────────────────────────────
+# Kept so existing TFE workspace variables don't break.
+variable "ibm_region" {
+  description = "Legacy single-region variable — use ibm_region_primary instead"
+  type        = string
+  default     = "us-south"
+}
+
+variable "ibm_zone" {
+  description = "Legacy single-region variable — use ibm_zone_primary instead"
+  type        = string
+  default     = "us-south-1"
+}
+
+variable "image_name" {
+  description = "Legacy image variable — use golden_image_name_us_south instead"
+  type        = string
+  default     = "rhel92-golden-20260830091707-us-south"
 }

@@ -78,3 +78,15 @@ variable "app_port" {
   type        = number
   default     = 80
 }
+
+variable "dr_role" {
+  description = "DR role tag: 'primary' or 'dr' — used by failover scripts to target VSIs"
+  type        = string
+  default     = "primary"
+}
+
+variable "dr_pair" {
+  description = "DR pair identifier, e.g. 'us-south-eu-de' — ties primary and DR together"
+  type        = string
+  default     = "us-south-eu-de"
+}

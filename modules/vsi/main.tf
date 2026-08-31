@@ -15,17 +15,19 @@ locals {
   name_prefix = "${var.project}-${var.environment}"
 }
 
-# ── Look up the CentOS Stream 9 stock image ───────────────────────
-data "ibm_is_image" "centos" {
+# ── Look up the Packer golden image by name ───────────────────────
+# image_name is set from golden_image_name_us_south / golden_image_name_eu_de
+# in terraform.tfvars — tracing directly back to the Packer build.
+data "ibm_is_image" "golden" {
   name = var.image_name
 }
 
-# ── 2 Virtual Server Instances ───────────────────────────────────
+# ── VSI instances ────────────────────────────────────────────────
 resource "ibm_is_instance" "app" {
   count   = var.vsi_count
   name    = "${local.name_prefix}-vsi-${count.index + 1}"
   profile = var.vsi_profile
-  image   = data.ibm_is_image.centos.id
+  image   = data.ibm_is_image.golden.id
   zone    = var.ibm_zone
 
   vpc  = var.vpc_id
@@ -36,7 +38,6 @@ resource "ibm_is_instance" "app" {
     security_groups = [var.vsi_sg_id]
   }
 
-  # ── User-data: install nginx + basic web page ─────────────────
   user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
     project      = var.project
     environment  = var.environment
@@ -45,7 +46,16 @@ resource "ibm_is_instance" "app" {
     ibm_zone     = var.ibm_zone
   })
 
-  tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform", "index:${count.index + 1}"]
+  # DR tags — failover scripts query these to find and activate DR VSIs
+  tags = [
+    "project:${var.project}",
+    "env:${var.environment}",
+    "managed-by:terraform",
+    "dr-role:${var.dr_role}",
+    "dr-pair:${var.dr_pair}",
+    "golden-image:${var.image_name}",
+    "index:${count.index + 1}",
+  ]
 }
 
 # ── LB Pool Members – register each VSI with the back-end pool ───

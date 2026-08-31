@@ -1,72 +1,55 @@
 # ---------------------------------------------------------------
-# terraform.tfvars  –  IBM Cloud DEMO configuration
+# terraform.tfvars  –  LAB-3931 DR Automation
 #
 # ── Credential model ────────────────────────────────────────────
-# ALL secrets (IBM API key + SSH public key) come from Vault KV.
-# Vault itself is authenticated via TFE Dynamic Credentials (JWT).
+# ALL secrets come from Vault KV (kv/IBM_cloud):
+#   ibm_api_key   → IBM Cloud provider auth
+#   public_key    → SSH key uploaded to both regions
 #
-# No static tokens. No API keys. Nothing sensitive lives here.
+# Vault is authenticated via HCP Terraform Dynamic Credentials.
+# Zero static secrets anywhere in this file or Terraform state.
 #
-# ── Vault location ───────────────────────────────────────────────
-#   Namespace : admin
-#   Mount     : kv
-#   Secret    : IBM_cloud     (kv/IBM_cloud)
-#   Keys      : public_key    ← SSH public key (already written)
-#               ibm_api_key   ← IBM Cloud API key (add before apply)
-#
-# ── TFC workspace env vars (set once in TFC UI / API) ───────────
-#   TFC_VAULT_PROVIDER_AUTH   = true
-#   TFC_DEFAULT_VAULT_ADDR    = https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200
-#   TFC_VAULT_NAMESPACE       = admin
-#   TFC_VAULT_PLAN_ROLE       = tfc-role
-#   TFC_VAULT_APPLY_ROLE      = tfc-role
-#
-# ── Add IBM API key to Vault before first apply ──────────────────
-#   vault kv patch -namespace=admin -mount=kv IBM_cloud \
-#     ibm_api_key="<your-ibm-cloud-api-key>"
+# ── Golden images ────────────────────────────────────────────────
+# After each Packer build, update golden_image_name_us_south
+# from packer/packer-manifest.json → builds[last].artifact_id,
+# then: ibmcloud is image <id> --output json | jq -r '.name'
 # ---------------------------------------------------------------
 
-# ── IBM Cloud General ────────────────────────────────────────────
-# Target: eu-de (Frankfurt) · zone eu-de-2
-# New VPC and subnet will be created automatically (no existing ones)
-ibm_region  = "eu-de"
-ibm_zone    = "eu-de-2"
+project     = "lab3931"
 environment = "demo"
-project     = "ent-demo"
+
+# ── PRIMARY — us-south ───────────────────────────────────────────
+ibm_region_primary           = "us-south"
+ibm_zone_primary             = "us-south-1"
+existing_vpc_name_primary    = "vpc-eelab"
+existing_subnet_name_primary = "sn-20260511-1"
+
+# ── DR — eu-de ───────────────────────────────────────────────────
+ibm_region_dr           = "eu-de"
+ibm_zone_dr             = "eu-de-2"
+existing_vpc_name_dr    = ""
+existing_subnet_name_dr = ""
+
+# ── Packer golden images ──────────────────────────────────────────
+# Last successful build: 2026-08-30  ID: r006-9bf1873d-437f-4fb0-82ce-7439afcafb3c
+golden_image_name_us_south = "rhel92-golden-20260830091707-us-south"
+# eu-de build not yet run — using us-south image as placeholder
+golden_image_name_eu_de    = "rhel92-golden-20260830091707-us-south"
+
+# ── VSI ──────────────────────────────────────────────────────────
+vsi_count   = 1
+vsi_profile = "cx2-2x4"
 
 # ── Networking ───────────────────────────────────────────────────
-# Empty strings → Terraform creates a new VPC + subnet in eu-de-2
-# subnet_address_count: IBM Cloud auto-carves a /24 (256 IPs) from the
-# zone's default address prefix — no CIDR collision possible.
-existing_vpc_name    = ""
-existing_subnet_name = ""
 subnet_address_count = 256
+ssh_allowed_cidr     = "10.0.0.0/8"
 
-# ── Security / SSH ────────────────────────────────────────────────
-ssh_allowed_cidr = "10.0.0.0/8"
-
-# ── Load Balancer / Web App ───────────────────────────────────────
+# ── App ──────────────────────────────────────────────────────────
 app_port          = 80
 health_check_path = "/"
 
-# ── VSI ──────────────────────────────────────────────────────────
-vsi_count   = 2
-vsi_profile = "bxf-2x8"                      # Flex | 2 vCPU / 8 GB RAM
-image_name  = "ibm-centos-stream-9-amd64-17"
-
-# ── HCP Vault Cluster – TFC Dynamic Credentials ──────────────────
-# These variables are managed in HCP Terraform workspace variables UI.
-# Do NOT set them here to avoid conflicts.
-#
-# Set the following as Terraform Variables in TFC UI:
-#   vault_address     = https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200
-#   vault_namespace   = admin
-#   vault_mount_path  = kv
-#   vault_secret_path = IBM_cloud
-#
-# Set the following as Environment Variables in TFC UI:
-#   TFC_VAULT_PROVIDER_AUTH   = true
-#   TFC_DEFAULT_VAULT_ADDR    = https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200
-#   TFC_VAULT_NAMESPACE       = admin
-#   TFC_VAULT_PLAN_ROLE       = tfc-role
-#   TFC_VAULT_APPLY_ROLE      = tfc-role
+# ── Vault ────────────────────────────────────────────────────────
+vault_address     = "https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200"
+vault_namespace   = "admin"
+vault_mount_path  = "kv"
+vault_secret_path = "IBM_cloud"

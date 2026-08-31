@@ -1,43 +1,72 @@
 # ---------------------------------------------------------------
-# Root outputs
+# outputs.tf  –  LAB-3931 DR Automation
 # ---------------------------------------------------------------
 
-output "vpc_id" {
-  description = "ID of the VPC used (existing or newly created)"
-  value       = module.networking.vpc_id
+# ── PRIMARY us-south ─────────────────────────────────────────────
+output "primary_vpc_id" {
+  description = "Primary VPC ID (us-south)"
+  value       = module.networking_primary.vpc_id
 }
 
-output "subnet_id" {
-  description = "ID of the subnet in eu-de-2 (existing or newly created)"
-  value       = module.networking.subnet_id
+output "primary_subnet_id" {
+  description = "Primary subnet ID (us-south)"
+  value       = module.networking_primary.subnet_id
 }
 
-output "ssh_key_id" {
-  description = "IBM Cloud SSH key ID (public key loaded from Vault)"
-  value       = module.networking.ssh_key_id
+output "primary_lb_hostname" {
+  description = "Primary ALB hostname — DNS entry for normal traffic"
+  value       = module.alb_primary.lb_hostname
 }
 
-output "lb_hostname" {
-  description = "Public hostname of the IBM Cloud Application Load Balancer"
-  value       = module.alb.lb_hostname
+output "primary_vsi_ids" {
+  description = "Primary VSI instance IDs"
+  value       = module.vsi_primary.vsi_ids
 }
 
-output "lb_id" {
-  description = "ID of the Application Load Balancer"
-  value       = module.alb.lb_id
+output "primary_vsi_private_ips" {
+  description = "Primary VSI private IPs"
+  value       = module.vsi_primary.vsi_private_ips
 }
 
-output "vsi_ids" {
-  description = "List of VSI instance IDs"
-  value       = module.vsi.vsi_ids
+# ── DR eu-de ─────────────────────────────────────────────────────
+output "dr_vpc_id" {
+  description = "DR VPC ID (eu-de)"
+  value       = module.networking_dr.vpc_id
 }
 
-output "vsi_private_ips" {
-  description = "Private IP addresses of the VSI instances"
-  value       = module.vsi.vsi_private_ips
+output "dr_subnet_id" {
+  description = "DR subnet ID (eu-de)"
+  value       = module.networking_dr.subnet_id
 }
 
+output "dr_lb_hostname" {
+  description = "DR ALB hostname — DNS entry for failover traffic"
+  value       = module.alb_dr.lb_hostname
+}
+
+output "dr_vsi_ids" {
+  description = "DR VSI instance IDs"
+  value       = module.vsi_dr.vsi_ids
+}
+
+output "dr_vsi_private_ips" {
+  description = "DR VSI private IPs"
+  value       = module.vsi_dr.vsi_private_ips
+}
+
+# ── Vault metadata ───────────────────────────────────────────────
 output "vault_secret_version" {
-  description = "Current version of the SSH keypair secret in Vault"
+  description = "Vault KV secret version used for this run — proves dynamic creds"
   value       = module.vault_integration.secret_version
+}
+
+# ── Golden image traceability ────────────────────────────────────
+output "golden_image_primary" {
+  description = "Packer golden image deployed to primary region"
+  value       = var.golden_image_name_us_south
+}
+
+output "golden_image_dr" {
+  description = "Packer golden image deployed to DR region"
+  value       = var.golden_image_name_eu_de
 }
