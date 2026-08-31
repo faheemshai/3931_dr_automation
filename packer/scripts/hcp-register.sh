@@ -57,17 +57,19 @@ PROJ="${HCP_PROJECT_ID}"
 
 # ── 2. Get HCP OAuth2 token ──────────────────────────────────────
 log "--- Fetching HCP token ---"
-TOKEN_RESPONSE=$(curl -sf \
+TOKEN_RESPONSE=$(curl -s --max-time 30 \
   --request POST \
   --url "https://auth.hashicorp.com/oauth/token" \
-  --data "grant_type=client_credentials" \
-  --data "client_id=${HCP_CLIENT_ID}" \
-  --data "client_secret=${HCP_CLIENT_SECRET}" \
-  --data "audience=https://api.hashicorp.cloud")
+  --header "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=client_credentials" \
+  --data-urlencode "client_id=${HCP_CLIENT_ID}" \
+  --data-urlencode "client_secret=${HCP_CLIENT_SECRET}" \
+  --data-urlencode "audience=https://api.hashicorp.cloud")
 
+log "Token response received."
 HCP_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.access_token // empty')
 [ -n "${HCP_TOKEN}" ] || die "Failed to get HCP token. Response: ${TOKEN_RESPONSE}"
-log "Token obtained."
+log "Token obtained: ${HCP_TOKEN:0:20}..."
 
 AUTH_HEADER="Authorization: Bearer ${HCP_TOKEN}"
 
