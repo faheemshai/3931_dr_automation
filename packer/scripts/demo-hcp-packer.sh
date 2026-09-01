@@ -264,7 +264,7 @@ else
   info "Getting HCP token from provided credentials..."
   TOKEN_RESP=$(curl -sf --max-time 15 \
     --request POST \
-    --url "https://auth.hashicorp.com/oauth/token" \
+    --url "https://auth.idp.hashicorp.com/oauth2/token" \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "grant_type=client_credentials" \
     --data-urlencode "client_id=${INPUT_HCP_ID}" \
