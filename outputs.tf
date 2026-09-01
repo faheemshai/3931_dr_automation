@@ -62,11 +62,11 @@ output "vault_secret_version" {
 
 # ── Golden image traceability ────────────────────────────────────
 output "golden_image_primary" {
-  description = "Packer golden image deployed to primary region"
-  value       = var.golden_image_name_us_south
+  description = "Packer golden image ID deployed to primary region"
+  value       = local.image_id_primary
 }
 
 output "golden_image_dr" {
-  description = "Packer golden image deployed to DR region"
-  value       = var.golden_image_name_eu_de
+  description = "Packer golden image ID deployed to DR region"
+  value       = local.image_id_dr
 }
