@@ -33,7 +33,7 @@ data "hcp_packer_artifact" "golden_primary" {
 data "hcp_packer_artifact" "golden_dr" {
   bucket_name         = "rhel92-golden"
   platform            = "ibmcloud"
-  region              = var.ibm_region_dr
+  region              = var.ibm_region_primary # fallback during Task 1 / Task 2 setup
   version_fingerprint = "fp-20260901180747"
 }
 
@@ -147,17 +147,17 @@ module "alb_dr" {
 }
 
 module "vsi_dr" {
-  source = "./modules/vsi"
+  source      = "./modules/vsi"
 
   project      = var.project
   environment  = "${var.environment}-dr"
   ibm_region   = var.ibm_region_dr
   ibm_zone     = var.ibm_zone_dr
-  vsi_count    = var.vsi_count
+  vsi_count    = var.enable_dr ? var.vsi_count : 0
   vsi_profile  = var.vsi_profile
 
-  # Same golden image family — eu-de variant — resolved dynamically
-  image_id     = local.image_id_dr
+  # Same golden image family — eu-de variant — resolved dynamically, fallback to primary when disabled
+  image_id     = var.enable_dr ? local.image_id_dr : local.image_id_primary
 
   vpc_id       = module.networking_dr.vpc_id
   subnet_id    = module.networking_dr.subnet_id

@@ -85,6 +85,13 @@ variable "golden_image_id_eu_de" {
   default     = ""
 }
 
+# ── DR region deployment control ──────────────────────────────────
+variable "enable_dr" {
+  description = "Set to true to deploy virtual server instances in the DR region (eu-de). Set to false to run us-south primary only."
+  type        = bool
+  default     = false # Default to false for Task 1 & Task 2 initial setup
+}
+
 # ── Networking ───────────────────────────────────────────────────
 variable "subnet_address_count" {
   description = "IPv4 addresses per subnet (256 = /24). IBM Cloud picks CIDR automatically."
