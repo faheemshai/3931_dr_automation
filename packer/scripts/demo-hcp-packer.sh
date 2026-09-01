@@ -7,8 +7,10 @@
 # Shows the complete Packer Enterprise story using only READ
 # operations — no builds, no writes, no auth surprises on stage.
 #
-# Prerequisites:
-#   vault login   (authenticated to the lab Vault cluster)
+# You will be prompted for three inputs at startup:
+#   1. Vault token   (from: vault login → token)
+#   2. HCP client ID     (from: Vault → kv/Packer → client_id)
+#   3. HCP client secret (from: Vault → kv/Packer → client_secret)
 #
 # Usage:
 #   sh packer/scripts/demo-hcp-packer.sh
@@ -33,8 +35,8 @@ ORG="d964990b-39d2-42d2-b37b-bb8ce075c701"
 PROJ="48e86032-f0da-45af-a68d-67c67d1f383b"
 BUCKET="rhel92-golden"
 
-VAULT_ADDR="${VAULT_ADDR:-https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200}"
-VAULT_NAMESPACE="${VAULT_NAMESPACE:-admin}"
+export VAULT_ADDR="${VAULT_ADDR:-https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200}"
+export VAULT_NAMESPACE="${VAULT_NAMESPACE:-admin}"
 
 section() {
   printf "\n${CYAN}════════════════════════════════════════════════════${RESET}\n"
@@ -47,6 +49,9 @@ warn() { printf "  ${RED}✘  %s${RESET}\n" "$1"; }
 kv()   { printf "  ${MAGENTA}%-32s${RESET} %s\n" "$1" "$2"; }
 pause() { printf "\n  ${DIM}[ press ENTER to continue ]${RESET}"; read -r _; }
 
+# ─────────────────────────────────────────────────────────────────
+# STARTUP — collect credentials interactively
+# ─────────────────────────────────────────────────────────────────
 clear
 printf "${BOLD}"
 cat << 'BANNER'
@@ -60,7 +65,57 @@ cat << 'BANNER'
 BANNER
 printf "${RESET}\n"
 printf "  ${BOLD}HCP Packer Golden Image Demo${RESET}\n"
-printf "  From build → registry → Terraform → DR failover\n\n"
+printf "  From build → registry → Terraform → DR failover\n"
+
+printf "\n${CYAN}────────────────────────────────────────────────────${RESET}\n"
+printf "${BOLD}  Setup — enter credentials (input is hidden)${RESET}\n"
+printf "${CYAN}────────────────────────────────────────────────────${RESET}\n\n"
+
+# ── Vault token ────────────────────────────────────────────────
+printf "  ${YELLOW}Vault token${RESET}  (vault login → copy token):\n  > "
+stty -echo 2>/dev/null; read -r INPUT_VAULT_TOKEN; stty echo 2>/dev/null
+printf "\n"
+if [ -z "${INPUT_VAULT_TOKEN}" ]; then
+  warn "Vault token not provided — Vault reads will be skipped"
+  VAULT_SKIP=1
+else
+  export VAULT_TOKEN="${INPUT_VAULT_TOKEN}"
+  ok "Vault token accepted"
+  VAULT_SKIP=0
+fi
+
+# ── HCP Client ID ──────────────────────────────────────────────
+printf "\n  ${YELLOW}HCP Client ID${RESET}  (Vault: kv/Packer → client_id):\n  > "
+stty -echo 2>/dev/null; read -r INPUT_HCP_ID; stty echo 2>/dev/null
+printf "\n"
+
+# ── HCP Client Secret ──────────────────────────────────────────
+printf "\n  ${YELLOW}HCP Client Secret${RESET}  (Vault: kv/Packer → client_secret):\n  > "
+stty -echo 2>/dev/null; read -r INPUT_HCP_SECRET; stty echo 2>/dev/null
+printf "\n"
+
+# ── Summary ────────────────────────────────────────────────────
+printf "\n${CYAN}────────────────────────────────────────────────────${RESET}\n"
+if [ -n "${INPUT_VAULT_TOKEN}" ]; then
+  ok "Vault token    set  (${#INPUT_VAULT_TOKEN} chars)"
+else
+  warn "Vault token    NOT set"
+fi
+if [ -n "${INPUT_HCP_ID}" ]; then
+  ok "HCP Client ID  set  (${#INPUT_HCP_ID} chars)"
+  HCP_SKIP=0
+else
+  warn "HCP Client ID  NOT set — Part 6 will show static fallback"
+  HCP_SKIP=1
+fi
+if [ -n "${INPUT_HCP_SECRET}" ]; then
+  ok "HCP Secret     set  (${#INPUT_HCP_SECRET} chars)"
+else
+  warn "HCP Secret     NOT set — Part 6 will show static fallback"
+  HCP_SKIP=1
+fi
+printf "\n  Press ENTER to begin the demo...\n"
+read -r _
 sleep 1
 
 # ─────────────────────────────────────────────────────────────────
@@ -95,6 +150,18 @@ printf "  ${BOLD}Vault read at build time:${RESET}\n\n"
 printf "    ${CYAN}vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud${RESET}\n"
 printf "    ${CYAN}export IBM_API_KEY=\"\$( ... )\"${RESET}\n"
 printf "    ${CYAN}packer build -var-file=student.pkrvars.hcl .${RESET}\n"
+printf "\n"
+
+# Live Vault read — only if token was provided
+if [ "${VAULT_SKIP}" = "0" ]; then
+  info "Reading IBM API key from Vault now to confirm..."
+  IBM_KEY_LEN=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=ibm_api_key IBM_cloud 2>/dev/null | wc -c | tr -d ' ')
+  if [ "${IBM_KEY_LEN:-0}" -gt 10 ]; then
+    ok "kv/IBM_cloud → ibm_api_key  ✔  (${IBM_KEY_LEN} chars — key exists, value hidden)"
+  else
+    warn "Could not read kv/IBM_cloud — check Vault token or path"
+  fi
+fi
 pause
 
 # ─────────────────────────────────────────────────────────────────
@@ -111,10 +178,10 @@ if [ ! -f "${MANIFEST}" ]; then
   RUN_UUID="c3b1a2d4-e5f6-7890-abcd-ef1234567890"
   BUILD_DATE="2026-09-01 06:11 UTC"
 else
-  ARTIFACT_ID=$(jq -r '.builds[-1].artifact_id'      "${MANIFEST}" 2>/dev/null)
-  BUILD_TIME=$(jq -r  '.builds[-1].build_time'        "${MANIFEST}" 2>/dev/null)
-  RUN_UUID=$(jq -r    '.builds[-1].packer_run_uuid'   "${MANIFEST}" 2>/dev/null)
-  IMAGE_NAME=$(jq -r  '.builds[-1].name'              "${MANIFEST}" 2>/dev/null)
+  ARTIFACT_ID=$(jq -r '.builds[-1].artifact_id'    "${MANIFEST}" 2>/dev/null)
+  BUILD_TIME=$(jq -r  '.builds[-1].build_time'      "${MANIFEST}" 2>/dev/null)
+  RUN_UUID=$(jq -r    '.builds[-1].packer_run_uuid' "${MANIFEST}" 2>/dev/null)
+  IMAGE_NAME=$(jq -r  '.builds[-1].name'            "${MANIFEST}" 2>/dev/null)
   BUILD_DATE=$(date -r "${BUILD_TIME}" "+%Y-%m-%d %H:%M UTC" 2>/dev/null || \
                date -d "@${BUILD_TIME}" "+%Y-%m-%d %H:%M UTC" 2>/dev/null || \
                echo "2026-09-01 06:11 UTC")
@@ -184,34 +251,30 @@ pause
 section "PART 6 — HCP Packer registry: query the bucket live"
 # ─────────────────────────────────────────────────────────────────
 printf "\n"
-info "Authenticating to HCP via Vault-stored credentials..."
-printf "\n"
 
-HCP_CLIENT_ID=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=client_id Packer 2>/dev/null)
-HCP_CLIENT_SECRET=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=client_secret Packer 2>/dev/null)
-
-if [ -z "${HCP_CLIENT_ID}" ] || [ -z "${HCP_CLIENT_SECRET}" ]; then
-  warn "Vault read failed — showing expected registry output (pre-demo: run 'vault login')"
+if [ "${HCP_SKIP}" = "1" ]; then
+  warn "HCP credentials not provided — showing expected registry output"
   printf "\n"
-  printf "  ${BOLD}Expected HCP Packer bucket — rhel92-golden:${RESET}\n\n"
+  printf "  ${BOLD}HCP Packer bucket — rhel92-golden:${RESET}\n\n"
   kv "Bucket:"    "rhel92-golden"
   kv "Versions:"  "1  (registered after build)"
   kv "Labels:"    "lab=lab-3931  os=rhel-9.2  managed-by=packer"
   kv "Portal:"    "https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}"
 else
-  ok "Vault read OK — getting HCP token..."
+  info "Getting HCP token from provided credentials..."
   TOKEN_RESP=$(curl -sf --max-time 15 \
     --request POST \
     --url "https://auth.hashicorp.com/oauth/token" \
     --header "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "grant_type=client_credentials" \
-    --data-urlencode "client_id=${HCP_CLIENT_ID}" \
-    --data-urlencode "client_secret=${HCP_CLIENT_SECRET}" \
+    --data-urlencode "client_id=${INPUT_HCP_ID}" \
+    --data-urlencode "client_secret=${INPUT_HCP_SECRET}" \
     --data-urlencode "audience=https://api.hashicorp.cloud" 2>/dev/null)
   HCP_TOKEN=$(printf '%s' "${TOKEN_RESP}" | jq -r '.access_token // empty' 2>/dev/null)
 
   if [ -z "${HCP_TOKEN}" ]; then
-    warn "HCP token fetch failed — check HCP credentials in Vault"
+    warn "HCP token fetch failed — check the client ID and secret you entered"
+    printf "  ${DIM}Response: %s${RESET}\n" "$(printf '%s' "${TOKEN_RESP}" | head -c 120)"
   else
     ok "HCP token obtained"
     printf "\n"
@@ -219,10 +282,26 @@ else
     BUCKET_RESP=$(curl -sf --max-time 15 \
       -H "Authorization: Bearer ${HCP_TOKEN}" \
       "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
+
     if [ -n "${BUCKET_RESP}" ]; then
-      BUCKET_LABELS=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.labels | to_entries[] | "    \(.key) = \(.value)"' 2>/dev/null)
-      printf "\n  ${BOLD}Bucket metadata from HCP API:${RESET}\n\n"
-      printf '%s\n' "${BUCKET_LABELS}"
+      printf "\n  ${BOLD}Live bucket metadata from HCP API:${RESET}\n\n"
+      # Labels
+      BUCKET_LABELS=$(printf '%s' "${BUCKET_RESP}" | jq -r '
+        .bucket.labels // {} | to_entries[] | "    \(.key) = \(.value)"' 2>/dev/null)
+      if [ -n "${BUCKET_LABELS}" ]; then
+        printf "  ${CYAN}Labels:${RESET}\n"
+        printf '%s\n' "${BUCKET_LABELS}"
+        printf "\n"
+      fi
+      # Latest version
+      LATEST_VERSION=$(printf '%s' "${BUCKET_RESP}" | jq -r \
+        '.bucket.latestVersion // "none registered yet"' 2>/dev/null)
+      PLATFORMS=$(printf '%s' "${BUCKET_RESP}" | jq -r \
+        '(.bucket.platforms // []) | join(", ")' 2>/dev/null)
+      kv "Latest version:"  "${LATEST_VERSION}"
+      kv "Platforms:"       "${PLATFORMS:-ibmcloud}"
+      kv "Portal:"          "https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}"
+      printf "\n"
       ok "Live data from HCP Packer — this is the authoritative image registry"
     else
       warn "Bucket query returned empty — bucket may not have registered versions yet"
@@ -248,10 +327,10 @@ printf "\n"
 printf "  ${BOLD}Terraform data source (Enterprise pattern):${RESET}\n\n"
 cat << 'HCL'
     data "hcp_packer_artifact" "golden" {
-      bucket_name          = "rhel92-golden"
-      platform             = "ibmcloud"
-      region               = "us-south"
-      channel_name         = "production"
+      bucket_name  = "rhel92-golden"
+      platform     = "ibmcloud"
+      region       = "us-south"
+      channel_name = "production"
     }
 
     # Terraform will FAIL at plan time if this version is revoked
