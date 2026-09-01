@@ -31,27 +31,27 @@ output "primary_vsi_private_ips" {
 # ── DR eu-de ─────────────────────────────────────────────────────
 output "dr_vpc_id" {
   description = "DR VPC ID (eu-de)"
-  value       = module.networking_dr.vpc_id
+  value       = var.DR_infra ? module.networking_dr[0].vpc_id : ""
 }
 
 output "dr_subnet_id" {
   description = "DR subnet ID (eu-de)"
-  value       = module.networking_dr.subnet_id
+  value       = var.DR_infra ? module.networking_dr[0].subnet_id : ""
 }
 
 output "dr_lb_hostname" {
   description = "DR ALB hostname — DNS entry for failover traffic"
-  value       = module.alb_dr.lb_hostname
+  value       = var.DR_infra ? module.alb_dr[0].lb_hostname : ""
 }
 
 output "dr_vsi_ids" {
   description = "DR VSI instance IDs"
-  value       = module.vsi_dr.vsi_ids
+  value       = var.DR_infra ? module.vsi_dr[0].vsi_ids : []
 }
 
 output "dr_vsi_private_ips" {
   description = "DR VSI private IPs"
-  value       = module.vsi_dr.vsi_private_ips
+  value       = var.DR_infra ? module.vsi_dr[0].vsi_private_ips : []
 }
 
 # ── Vault metadata ───────────────────────────────────────────────

@@ -49,6 +49,9 @@ locals {
 
 module "networking_primary" {
   source = "./modules/vpc"
+  providers = {
+    ibm = ibm.primary
+  }
 
   project              = var.project
   environment          = var.environment
@@ -57,11 +60,14 @@ module "networking_primary" {
   subnet_address_count = var.subnet_address_count
   existing_vpc_name    = var.existing_vpc_name_primary
   existing_subnet_name = var.existing_subnet_name_primary
-  ssh_public_key       = module.vault_integration.ssh_public_key
+  ssh_public_key       = file("${path.root}/../ent_demo_ed25519.pub")
 }
 
 module "security_groups_primary" {
   source = "./modules/security_groups"
+  providers = {
+    ibm = ibm.primary
+  }
 
   project          = var.project
   environment      = var.environment
@@ -72,6 +78,9 @@ module "security_groups_primary" {
 
 module "alb_primary" {
   source = "./modules/alb"
+  providers = {
+    ibm = ibm.primary
+  }
 
   project           = var.project
   environment       = var.environment
@@ -83,6 +92,9 @@ module "alb_primary" {
 
 module "vsi_primary" {
   source = "./modules/vsi"
+  providers = {
+    ibm = ibm.primary
+  }
 
   project      = var.project
   environment  = var.environment
@@ -113,7 +125,11 @@ module "vsi_primary" {
 # ═══════════════════════════════════════════════════════════════
 
 module "networking_dr" {
+  count  = var.DR_infra ? 1 : 0
   source = "./modules/vpc"
+  providers = {
+    ibm = ibm.dr
+  }
 
   project              = var.project
   environment          = "${var.environment}-dr"
@@ -122,50 +138,61 @@ module "networking_dr" {
   subnet_address_count = var.subnet_address_count
   existing_vpc_name    = var.existing_vpc_name_dr
   existing_subnet_name = var.existing_subnet_name_dr
-  ssh_public_key       = module.vault_integration.ssh_public_key
+  ssh_public_key       = file("${path.root}/../ent_demo_ed25519.pub")
 }
 
 module "security_groups_dr" {
+  count  = var.DR_infra ? 1 : 0
   source = "./modules/security_groups"
+  providers = {
+    ibm = ibm.dr
+  }
 
   project          = var.project
   environment      = "${var.environment}-dr"
-  vpc_id           = module.networking_dr.vpc_id
+  vpc_id           = module.networking_dr[0].vpc_id
   ssh_allowed_cidr = var.ssh_allowed_cidr
   app_port         = var.app_port
 }
 
 module "alb_dr" {
+  count  = var.DR_infra ? 1 : 0
   source = "./modules/alb"
+  providers = {
+    ibm = ibm.dr
+  }
 
   project           = var.project
   environment       = "${var.environment}-dr"
   ibm_region        = var.ibm_region_dr
-  subnet_id         = module.networking_dr.subnet_id
+  subnet_id         = module.networking_dr[0].subnet_id
   app_port          = var.app_port
   health_check_path = var.health_check_path
 }
 
 module "vsi_dr" {
-  source      = "./modules/vsi"
+  count  = var.DR_infra ? 1 : 0
+  source = "./modules/vsi"
+  providers = {
+    ibm = ibm.dr
+  }
 
   project      = var.project
   environment  = "${var.environment}-dr"
   ibm_region   = var.ibm_region_dr
   ibm_zone     = var.ibm_zone_dr
-  vsi_count    = var.enable_dr ? var.vsi_count : 0
+  vsi_count    = var.vsi_count
   vsi_profile  = var.vsi_profile
 
-  # Same golden image family — eu-de variant — resolved dynamically, fallback to primary when disabled
-  image_id     = var.enable_dr ? local.image_id_dr : local.image_id_primary
+  image_id     = local.image_id_dr
 
-  vpc_id       = module.networking_dr.vpc_id
-  subnet_id    = module.networking_dr.subnet_id
-  ssh_key_id   = module.networking_dr.ssh_key_id
-  lb_sg_id     = module.security_groups_dr.lb_sg_id
-  vsi_sg_id    = module.security_groups_dr.vsi_sg_id
-  lb_id        = module.alb_dr.lb_id
-  lb_pool_id   = module.alb_dr.pool_id
+  vpc_id       = module.networking_dr[0].vpc_id
+  subnet_id    = module.networking_dr[0].subnet_id
+  ssh_key_id   = module.networking_dr[0].ssh_key_id
+  lb_sg_id     = module.security_groups_dr[0].lb_sg_id
+  vsi_sg_id    = module.security_groups_dr[0].vsi_sg_id
+  lb_id        = module.alb_dr[0].lb_id
+  lb_pool_id   = module.alb_dr[0].pool_id
   app_port     = var.app_port
 
   dr_role      = "dr"

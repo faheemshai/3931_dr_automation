@@ -86,10 +86,10 @@ variable "golden_image_id_eu_de" {
 }
 
 # ── DR region deployment control ──────────────────────────────────
-variable "enable_dr" {
-  description = "Set to true to deploy virtual server instances in the DR region (eu-de). Set to false to run us-south primary only."
+variable "DR_infra" {
+  description = "Set to true to deploy all infrastructure in the DR region (eu-de). Set to false to run us-south primary only."
   type        = bool
-  default     = false # Default to false for Task 1 & Task 2 initial setup
+  default     = false
 }
 
 # ── Networking ───────────────────────────────────────────────────
