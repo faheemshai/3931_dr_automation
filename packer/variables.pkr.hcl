@@ -7,7 +7,7 @@
 # The IBM Cloud API key is the only secret needed for the build.
 # It is read from Vault at build time and exported as IBM_API_KEY:
 #
-#   export IBM_API_KEY=$(vault kv get -mount=kv -field=ibm_api_key IBM_cloud)
+#   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
 #   packer build -var-file=student.pkrvars.hcl .
 # ---------------------------------------------------------------
 

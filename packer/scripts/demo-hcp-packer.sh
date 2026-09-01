@@ -92,7 +92,7 @@ ok "Never written to disk, never in git history"
 ok "Vault Radar blocks any accidental commit of a real key"
 printf "\n"
 printf "  ${BOLD}Vault read at build time:${RESET}\n\n"
-printf "    ${CYAN}vault kv get -mount=kv -field=ibm_api_key IBM_cloud${RESET}\n"
+printf "    ${CYAN}vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud${RESET}\n"
 printf "    ${CYAN}export IBM_API_KEY=\"\$( ... )\"${RESET}\n"
 printf "    ${CYAN}packer build -var-file=student.pkrvars.hcl .${RESET}\n"
 pause
@@ -187,8 +187,8 @@ printf "\n"
 info "Authenticating to HCP via Vault-stored credentials..."
 printf "\n"
 
-HCP_CLIENT_ID=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=client_id HCP_packer 2>/dev/null)
-HCP_CLIENT_SECRET=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=client_secret HCP_packer 2>/dev/null)
+HCP_CLIENT_ID=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=client_id Packer 2>/dev/null)
+HCP_CLIENT_SECRET=$(vault kv get -namespace="${VAULT_NAMESPACE}" -mount=kv -field=client_secret Packer 2>/dev/null)
 
 if [ -z "${HCP_CLIENT_ID}" ] || [ -z "${HCP_CLIENT_SECRET}" ]; then
   warn "Vault read failed — showing expected registry output (pre-demo: run 'vault login')"
