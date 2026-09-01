@@ -6,39 +6,19 @@
 # STEP 1 — Copy this file:
 #   cp student.pkrvars.hcl.example student.pkrvars.hcl
 #
-# STEP 2 — Fill in YOUR values in student.pkrvars.hcl
+# STEP 2 — Edit student.pkrvars.hcl — set your student_id
+#           Leave ibm_api_key = "" (it is exported from Vault below)
 #
-# STEP 3 — Load credentials from Vault (do this ONCE per shell):
-#   source packer/scripts/set-build-env.sh
+# STEP 3 — Export all credentials from Vault:
+#   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
+#   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
+#   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
 #
 # STEP 4 — Run the build:
 #   cd packer/
+#   packer init .
 #   packer validate -var-file=student.pkrvars.hcl .
 #   packer build   -var-file=student.pkrvars.hcl .
-#
-# ── What goes IN this file vs what goes in the shell ────────────
-#
-#   IN THIS FILE (Packer input variables):
-#     ibm_api_key            ← IBM Cloud API key
-#     student_id             ← your student number
-#     ibm_resource_group_id  ← your IBM Cloud resource group
-#     base_image_name        ← which RHEL 9 base image to use
-#     subnet_id_us_south     ← subnet for the build VSI
-#     build_eu_de            ← true/false for DR region build
-#
-#   IN YOUR SHELL only — set-build-env.sh handles these:
-#     HCP_CLIENT_ID          ← cannot go in a var file (HCP binary-level auth)
-#     HCP_CLIENT_SECRET      ← cannot go in a var file (HCP binary-level auth)
-#     HCP_ORGANIZATION_ID    ← cannot go in a var file
-#     HCP_PROJECT_ID         ← cannot go in a var file
-#
-#   WHY can't HCP vars go in this file?
-#     The hcp_packer_registry block in the build template is processed by
-#     the Packer binary itself, not by your HCL template. Packer reads
-#     HCP credentials exclusively from environment variables — there is no
-#     HCL variable declaration for them. This is by design (security boundary).
-#     The set-build-env.sh script reads them from Vault and exports them so
-#     you never have to type or see the actual secret values.
 #
 # ── Security rules ───────────────────────────────────────────────
 #   student.pkrvars.hcl  is gitignored — NEVER commit it.
