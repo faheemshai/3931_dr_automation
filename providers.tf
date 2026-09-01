@@ -57,6 +57,14 @@ provider "ibm" {
   ibmcloud_api_key = local.ibm_api_key
 }
 
+# ── HCP credentials from Vault ────────────────────────────────────
+data "vault_kv_secret_v2" "hcp_credentials" {
+  mount = var.vault_mount_path
+  name  = "Packer"
+}
+
 # ── HCP Provider (HCP Packer Integration) ────────────────────────
-# Authenticated automatically via HCP_CLIENT_ID and HCP_CLIENT_SECRET env vars
-provider "hcp" {}
+provider "hcp" {
+  client_id     = data.vault_kv_secret_v2.hcp_credentials.data["HCP_CLIENT_ID"]
+  client_secret = data.vault_kv_secret_v2.hcp_credentials.data["HCP_CLIENT_SECRET"]
+}
