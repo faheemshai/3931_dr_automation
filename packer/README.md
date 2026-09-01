@@ -56,13 +56,42 @@ After a successful build:
 
 ---
 
-## What gets built
+## Build flow
 
-The build VSI runs [`scripts/harden-rhel92.sh`](scripts/harden-rhel92.sh) which applies
-8 CIS-aligned hardening steps, then the image is captured.
+The provisioner sequence inside the `build {}` block runs in this exact order:
 
-| Step | What happens |
-|------|-------------|
+```
+packer build
+│
+├── provisioner "file"          Step 1 — upload harden-rhel92.sh to VSI
+│
+├── provisioner "shell"         Step 2 — run harden-rhel92.sh (8 CIS steps, ~20 min)
+│
+├── provisioner "shell"         Step 3 — stamp metadata into /etc/os-release
+│                                         LAB_BUILD_IMAGE, LAB_BUILD_DATE, LAB_STUDENT_ID
+│
+├── provisioner "hcp-sbom"      Step 4 — generate SBOM of the hardened image state
+│                                         auto_generate=true: Packer binary uploaded to
+│                                         VSI, runs embedded Syft SDK, scans /, downloads
+│                                         CycloneDX JSON to packer/sbom/, uploads to HCP
+│
+├── provisioner "shell"         Step 5 — pre-capture cleanup
+│                                         (rm host keys, dnf clean, truncate bash_history)
+│
+│   ← IBM Cloud captures the image here ─────────────────────────────────────────────
+│
+├── post-processor "manifest"   writes packer-manifest.json (image ID, run UUID)
+│
+└── post-processor "shell-local" runs hcp-register-build.sh on your laptop
+                                  → registers version + artifact in HCP Packer portal
+```
+
+### Hardening steps (Step 2)
+
+[`scripts/harden-rhel92.sh`](scripts/harden-rhel92.sh) applies 8 CIS RHEL 9 Level 1 steps:
+
+| # | What happens |
+|---|-------------|
 | 1 | `dnf update` — all packages patched to latest |
 | 2 | `nginx`, `jq`, `openssl`, `curl`, `auditd` installed |
 | 3 | `bluetooth`, `avahi`, `cups`, `telnet`, `vsftpd` disabled |
@@ -72,17 +101,28 @@ The build VSI runs [`scripts/harden-rhel92.sh`](scripts/harden-rhel92.sh) which 
 | 7 | firewalld: **drop** zone — only `ssh/http/https` allowed |
 | 8 | `auditd`, `chronyd`, `rsyslog` enabled at boot |
 
-Build metadata is stamped into `/etc/os-release` on every image:
+### Metadata stamp (Step 3)
+
+Stamped into `/etc/os-release` on every image:
+
 ```
 LAB_BUILD_IMAGE=rhel92-golden-<timestamp>
 LAB_BUILD_DATE=<timestamp>
 LAB_STUDENT_ID=student-XX
 ```
 
-A **CycloneDX SBOM** (Software Bill of Materials) is generated automatically
-using `packer sbom-generate` (embedded Syft scanner) and saved to `sbom/`.
-The SBOM inventories every installed package and is available for CVE scanning
-tools such as Grype, Trivy, and Snyk.
+### SBOM generation (Step 4)
+
+Uses `provisioner "hcp-sbom"` with `auto_generate = true`:
+
+- Packer uploads its own binary to the VSI — no extra tools needed on the build host
+- Runs `packer sbom-generate` (embedded Syft SDK) — scans the full filesystem
+- Downloads the **CycloneDX JSON** SBOM to `packer/sbom/` on your laptop
+- Uploads the SBOM to HCP Packer and attaches it to the version automatically
+- `packer/sbom/` is tracked in git via `.gitkeep`; generated `*.json` files are gitignored
+- The SBOM captures the **hardened, final image state** — not the base image
+
+Any CVE scanner (Grype, Trivy, Snyk) can consume the CycloneDX JSON directly.
 
 ---
 
