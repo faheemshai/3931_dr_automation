@@ -222,12 +222,15 @@ build {
   #   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
   #   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
   post-processor "shell-local" {
+    # HCP_CLIENT_ID and HCP_CLIENT_SECRET are inherited from the shell
+    # environment where you ran `packer build` — no need to re-declare them.
+    # PACKER_TEMPLATE_DIR tells the script where packer-manifest.json lives.
     environment_vars = [
-      "HCP_CLIENT_ID=${env("HCP_CLIENT_ID")}",
-      "HCP_CLIENT_SECRET=${env("HCP_CLIENT_SECRET")}",
       "PACKER_TEMPLATE_DIR=${path.root}",
     ]
-    execute_command = ["sh", "-c", "{{.Vars}} sh '{{.Script}}'"]
-    script          = "${path.root}/scripts/hcp-register-build.sh"
+    execute_command    = ["sh", "-c", "{{.Vars}} sh '{{.Script}}'"]
+    script             = "${path.root}/scripts/hcp-register-build.sh"
+    # Image is already captured — never fail the build over HCP registration
+    valid_exit_codes   = [0, 1, 2]
   }
 }

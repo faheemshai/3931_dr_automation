@@ -18,7 +18,8 @@
 #   Post-processor "shell-local" in rhel92-ibmcloud.pkr.hcl
 # ---------------------------------------------------------------
 
-set -e
+# Do NOT use set -e — curl failures must be handled explicitly so the
+# post-processor always exits 0 (image is already built; HCP is optional).
 
 BOLD="\033[1m"
 CYAN="\033[1;36m"
@@ -84,7 +85,8 @@ printf "\n"
 
 # ── Get HCP token ─────────────────────────────────────────────
 info "Authenticating to HCP..."
-TOKEN_RESP=$(curl -sf --max-time 15 \
+# -s = silent, no -f so HTTP errors don't cause non-zero exit, --retry 3
+TOKEN_RESP=$(curl -s --retry 3 --retry-delay 2 --max-time 30 \
   --request POST \
   --url "https://auth.idp.hashicorp.com/oauth2/token" \
   --header "Content-Type: application/x-www-form-urlencoded" \
@@ -96,14 +98,15 @@ HCP_TOKEN=$(printf '%s' "${TOKEN_RESP}" | jq -r '.access_token // empty' 2>/dev/
 
 if [ -z "${HCP_TOKEN}" ]; then
   warn "HCP token fetch failed — skipping registration"
-  printf "  Response: %s\n" "${TOKEN_RESP}" | head -c 200
+  printf "  Response: %.200s\n" "${TOKEN_RESP}"
   exit 0
 fi
 ok "HCP token obtained"
 
 # Helper for all subsequent HCP API calls
+# -s silent, no -f, --retry 3 so transient network blips are retried
 _hcp() {
-  curl -sf --max-time 20 \
+  curl -s --retry 3 --retry-delay 2 --max-time 30 \
     -H "Authorization: Bearer ${HCP_TOKEN}" \
     -H "Content-Type: application/json" "$@"
 }

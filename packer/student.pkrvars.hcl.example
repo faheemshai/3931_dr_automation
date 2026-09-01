@@ -30,11 +30,10 @@
 student_id = "student-XX"    # ← replace XX with your assigned number
 
 # ── IBM Cloud API key ────────────────────────────────────────────
-# Paste your IBM Cloud API key here.
-# The lab instructor stores it in Vault — retrieve it with:
-#   vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud
-# Or leave empty ("") if you ran set-build-env.sh (it exports IBM_API_KEY).
-ibm_api_key = ""
+# Do NOT set ibm_api_key here. The variable default in variables.pkr.hcl
+# reads env("IBM_API_KEY"), so export it in your shell before running
+# packer validate or packer build:
+#   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
 
 # ── IBM Cloud resource group ID ──────────────────────────────────
 # Get it with: ibmcloud resource group <name> --id
