@@ -194,3 +194,125 @@ printf "  %-35s ${RED}%-20s${RESET} ${GREEN}%-20s${RESET}\n" "RBAC on image acce
 echo ""
 ok "Everything in this lab uses Enterprise. Next: Terraform apply → DR failover."
 echo ""
+sleep 2
+
+# ─────────────────────────────────────────────────────────────────
+section "SLIDE 8 — Why the HCP UI shows '—' after a successful build"
+# ─────────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "  ${BOLD}You just saw this in the HCP Packer portal:${RESET}"
+echo ""
+echo -e "    Newest version  —"
+echo -e "    Status          —"
+echo -e "    Published       (blank)"
+echo -e "    Fingerprint     —"
+echo ""
+echo -e "  ${BOLD}Here is exactly why:${RESET}"
+echo ""
+warn "packer build succeeded  →  IBM Cloud image created  →  NOTHING sent to HCP"
+echo ""
+echo -e "  ${CYAN}Two completely separate paths:${RESET}"
+echo ""
+printf "  ${BOLD}%-38s${RESET}  ${BOLD}%s${RESET}\n" "What packer-manifest.json does:" "What hcp_packer_registry block does:"
+printf "  %-38s  %s\n" "──────────────────────────────────" "───────────────────────────────────────"
+printf "  ${YELLOW}%-38s${RESET}  ${GREEN}%s${RESET}\n" "Writes image ID to local JSON file"  "Authenticates to HCP Cloud API"
+printf "  ${YELLOW}%-38s${RESET}  ${GREEN}%s${RESET}\n" "Available only on your laptop"       "Creates/updates bucket in HCP"
+printf "  ${YELLOW}%-38s${RESET}  ${GREEN}%s${RESET}\n" "No HCP auth needed"                  "Registers version + fingerprint"
+printf "  ${YELLOW}%-38s${RESET}  ${GREEN}%s${RESET}\n" "No version tracking"                 "Attaches SBOM to the version"
+printf "  ${YELLOW}%-38s${RESET}  ${GREEN}%s${RESET}\n" "No governance, no policy"            "Marks version Published/Active"
+printf "  ${YELLOW}%-38s${RESET}  ${GREEN}%s${RESET}\n" "Open-source behaviour"               "Enterprise behaviour"
+echo ""
+info "The bucket page showed labels because the bucket was pre-created manually."
+info "But Versions=0 because no build ever had HCP_CLIENT_ID+SECRET exported."
+sleep 2
+
+# ─────────────────────────────────────────────────────────────────
+section "SLIDE 9 — The exact fix: env vars + hcp_packer_registry block"
+# ─────────────────────────────────────────────────────────────────
+
+ORG="d964990b-39d2-42d2-b37b-bb8ce075c701"
+PROJ="48e86032-f0da-45af-a68d-67c67d1f383b"
+BUCKET="rhel92-golden"
+
+echo ""
+echo -e "  ${BOLD}Step 1 — Export HCP credentials before every build:${RESET}"
+echo ""
+echo -e "    ${CYAN}export HCP_CLIENT_ID=\"d74d3df1cded0965ef6b99ea4c3a2093\"${RESET}"
+echo -e "    ${CYAN}export HCP_CLIENT_SECRET=\"\$(vault kv get -namespace=admin \\${RESET}"
+echo -e "    ${CYAN}      -mount=kv -field=client_secret HCP_packer)\"${RESET}"
+echo -e "    ${CYAN}export HCP_ORGANIZATION_ID=\"${ORG}\"${RESET}"
+echo -e "    ${CYAN}export HCP_PROJECT_ID=\"${PROJ}\"${RESET}"
+echo -e "    ${CYAN}export IBM_API_KEY=\"\$(vault kv get -namespace=admin \\${RESET}"
+echo -e "    ${CYAN}      -mount=kv -field=ibm_api_key IBM_cloud)\"${RESET}"
+echo ""
+echo -e "  ${BOLD}Step 2 — The hcp_packer_registry block is already in the template:${RESET}"
+echo ""
+grep -A5 'hcp_packer_registry' "${PACKER_DIR}/rhel92-ibmcloud.pkr.hcl" | head -8 | sed 's/^/    /'
+echo ""
+echo -e "  ${BOLD}Step 3 — Run the build:${RESET}"
+echo ""
+echo -e "    ${CYAN}cd packer/${RESET}"
+echo -e "    ${CYAN}packer build -var-file=student.pkrvars.hcl .${RESET}"
+echo ""
+ok "After the build completes, refresh the HCP UI — you will see:"
+echo ""
+echo -e "    Newest version  ${GREEN}v1${RESET}"
+echo -e "    Status          ${GREEN}active${RESET}"
+echo -e "    Published       ${GREEN}$(date '+%Y-%m-%d')${RESET}"
+echo -e "    Fingerprint     ${GREEN}(packer run UUID)${RESET}"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+section "SLIDE 10 — What the HCP UI shows AFTER the fix"
+# ─────────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "  ${BOLD}HCP Packer Portal — direct URL:${RESET}"
+echo ""
+echo -e "  ${CYAN}https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}${RESET}"
+echo ""
+echo -e "  ${BOLD}Bucket Overview page:${RESET}"
+echo ""
+kv "Newest version"  "v1  (increments every build)"
+kv "Status"          "active"
+kv "Published"       "$(date '+%Y-%m-%d')"
+kv "Fingerprint"     "packer run UUID — ties to git commit"
+kv "Labels"          "lab:lab-3931  os:rhel-9.2  managed-by:packer"
+echo ""
+echo -e "  ${BOLD}Version details tab — build_labels (hardening evidence):${RESET}"
+echo ""
+kv "hardening-step-1"  "system-packages-updated"
+kv "hardening-step-2"  "nginx-jq-openssl-curl-installed"
+kv "hardening-step-3"  "unnecessary-services-disabled"
+kv "hardening-step-4"  "cis-sysctl-kernel-hardening-applied"
+kv "hardening-step-5"  "selinux-set-to-enforcing"
+kv "hardening-step-6"  "ssh-hardened-no-password-auth"
+kv "hardening-step-7"  "firewalld-drop-zone-ssh-http-https-only"
+kv "hardening-step-8"  "audit-chrony-rsyslog-enabled-at-boot"
+kv "cis-benchmark"     "rhel9-level-1"
+kv "sbom-format"       "cyclonedx-json"
+kv "sbom-scanner"      "packer-syft-embedded"
+echo ""
+echo -e "  ${BOLD}SBOM tab — Software Bill of Materials:${RESET}"
+echo ""
+# Show SBOM file if one was generated
+SBOM_FILE=$(ls -t "${PACKER_DIR}/sbom/"*.json 2>/dev/null | head -1)
+if [ -n "${SBOM_FILE}" ]; then
+  SBOM_COMPONENTS=$(jq '.components | length' "${SBOM_FILE}" 2>/dev/null || echo "N/A")
+  SBOM_CREATED=$(jq -r '.metadata.timestamp' "${SBOM_FILE}" 2>/dev/null || echo "N/A")
+  ok "SBOM file found: $(basename ${SBOM_FILE})"
+  kv "Components scanned"  "${SBOM_COMPONENTS} packages"
+  kv "Generated at"        "${SBOM_CREATED}"
+  kv "Format"              "CycloneDX JSON (Syft embedded scanner)"
+  echo ""
+  info "Sample packages from SBOM:"
+  jq -r '.components[:5][] | "  \(.name) \(.version)"' "${SBOM_FILE}" 2>/dev/null | sed 's/^/    /'
+else
+  info "No SBOM file yet — will appear in packer/sbom/ after next build"
+  info "Then visible in HCP UI under: Version → SBOM tab"
+fi
+echo ""
+ok "This is the complete supply chain audit trail — from git commit to deployed VSI"
+ok "Every CVE scan tool (Grype, Trivy, Snyk) can consume this CycloneDX SBOM"
+echo ""
