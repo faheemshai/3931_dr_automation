@@ -76,8 +76,13 @@ BUILD_DATE=$(date -r "${BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
              date -d "@${BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
              date "+%Y-%m-%d")
 
+# To prevent fingerprint collision and duplicate version errors, we generate a 100%
+# unique, timestamp-based fingerprint. HCP Packer limits fingerprints to 40 characters.
+FINGERPRINT="fp-$(date "+%Y%m%d%H%M%S")"
+
 printf "  %-20s %s\n" "Artifact ID:"  "${ARTIFACT_ID}"
 printf "  %-20s %s\n" "Run UUID:"     "${RUN_UUID}"
+printf "  %-20s %s\n" "Fingerprint:"  "${FINGERPRINT}"
 printf "  %-20s %s\n" "Build name:"   "${BUILD_NAME}"
 printf "  %-20s %s\n" "Region:"       "${REGION}"
 printf "  %-20s %s\n" "Build date:"   "${BUILD_DATE}"
@@ -126,30 +131,35 @@ if [ -z "${BUCKET_OK}" ] && [ -n "${HAS_ERROR}" ]; then
 fi
 ok "Bucket reachable: ${BUCKET}"
 
-# ── Step 2: Get or create version ────────────────────────────
-# Check if a version with this fingerprint already exists (e.g. from a
-# previous failed run) so we can reuse it instead of creating a duplicate.
-info "Checking for existing version (fingerprint=${RUN_UUID})..."
+# ── Step 2: Create version (delete stale one first if exists) ────
+# A previous failed run may have left an incomplete version with this
+# fingerprint. HCP won't accept builds against it. Delete and recreate.
+info "Checking for stale version (fingerprint=${FINGERPRINT})..."
 VERSIONS_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" 2>/dev/null)
-VERSION_ID=$(printf '%s' "${VERSIONS_RESP}" | jq -r \
-  ".versions[]? | select(.fingerprint==\"${RUN_UUID}\") | .id" 2>/dev/null | head -1)
+STALE_ID=$(printf '%s' "${VERSIONS_RESP}" | jq -r \
+  ".versions[]? | select(.fingerprint==\"${FINGERPRINT}\") | .id" 2>/dev/null | head -1)
 
-if [ -n "${VERSION_ID}" ]; then
-  ok "Existing version found: ${VERSION_ID} — reusing"
-else
-  info "Creating new version..."
-  VER_RESP=$(_hcp --request POST \
-    "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
-    --data "{\"fingerprint\":\"${RUN_UUID}\"}" 2>/dev/null)
-  VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
-  if [ -z "${VERSION_ID}" ]; then
-    warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
-    exit 0
-  fi
-  ok "Version created: ${VERSION_ID}"
-  # Give HCP a moment to fully commit the new version
-  sleep 3
+if [ -n "${STALE_ID}" ]; then
+  info "Deleting stale version ${STALE_ID}..."
+  _hcp --request DELETE \
+    "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${STALE_ID}" \
+    > /dev/null 2>&1
+  ok "Stale version deleted"
+  sleep 2
 fi
+
+info "Creating version (fingerprint=${FINGERPRINT})..."
+VER_RESP=$(_hcp --request POST \
+  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
+  --data "{\"fingerprint\":\"${FINGERPRINT}\"}" 2>/dev/null)
+VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
+if [ -z "${VERSION_ID}" ]; then
+  warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
+  exit 0
+fi
+ok "Version created: ${VERSION_ID}"
+# Give HCP a moment to fully commit the version before posting builds to it
+sleep 5
 
 # ── Step 3: Create build record with hardening labels ─────────
 info "Creating build record..."
@@ -181,7 +191,7 @@ BUILD_PAYLOAD=$(jq -n \
     }
   }')
 BUILD_RESP=$(_hcp --request POST \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}/builds" \
+  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}/builds" \
   --data "${BUILD_PAYLOAD}" 2>/dev/null)
 BUILD_ID=$(printf '%s' "${BUILD_RESP}" | jq -r '.build.id // empty' 2>/dev/null)
 if [ -z "${BUILD_ID}" ]; then
@@ -193,7 +203,7 @@ ok "Build record created: ${BUILD_ID}"
 # ── Step 4: Register artifact ─────────────────────────────────
 info "Registering artifact: ${ARTIFACT_ID}..."
 _hcp --request POST \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}/builds/${BUILD_ID}/artifacts" \
+  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}/builds/${BUILD_ID}/artifacts" \
   --data "{
     \"external_identifier\": \"${ARTIFACT_ID}\",
     \"region\": \"${REGION}\",
@@ -204,14 +214,14 @@ ok "Artifact registered"
 # ── Step 5: Mark build DONE ───────────────────────────────────
 info "Marking build DONE..."
 _hcp --request PATCH \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}/builds/${BUILD_ID}" \
+  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}/builds/${BUILD_ID}" \
   --data '{"status":"BUILD_DONE"}' > /dev/null 2>&1
 ok "Build marked DONE"
 
 # ── Step 6: Complete version ──────────────────────────────────
 info "Completing version..."
 _hcp --request PATCH \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}" \
+  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}" \
   --data '{}' > /dev/null 2>&1
 ok "Version complete"
 

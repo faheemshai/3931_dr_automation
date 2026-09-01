@@ -71,28 +71,18 @@ variable "existing_subnet_name_dr" {
 }
 
 # ── Golden images from Packer ────────────────────────────────────
-# These are IBM Cloud image names (not IDs) — populated from
-# packer/packer-manifest.json after a successful Packer build.
-# The VSI module does a data lookup by name.
-variable "golden_image_name_us_south" {
-  description = <<-EOT
-    IBM Cloud image name of the Packer-built golden image in us-south.
-    Find in packer/packer-manifest.json → artifact_id, then:
-      ibmcloud is image <id> --output json | jq -r '.name'
-    Example: "rhel92-golden-20260830091707-us-south"
-  EOT
-  type    = string
-  default = "rhel92-golden-20260830091707-us-south"
+# These can be manually supplied, or they resolve dynamically from
+# the hcp_packer_artifact data source if left as default/empty.
+variable "golden_image_id_us_south" {
+  description = "IBM Cloud image ID (r006-...) of the Packer-built golden image in us-south. Sourced from Vault/Packer."
+  type        = string
+  default     = ""
 }
 
-variable "golden_image_name_eu_de" {
-  description = <<-EOT
-    IBM Cloud image name of the Packer-built golden image in eu-de.
-    Build with: packer build -var build_eu_de=true -var-file=student.pkrvars.hcl .
-    Falls back to us-south image name during Task 1 (single-region build).
-  EOT
-  type    = string
-  default = "rhel92-golden-20260830091707-us-south"
+variable "golden_image_id_eu_de" {
+  description = "IBM Cloud image ID (r006-...) of the Packer-built golden image in eu-de. Sourced from Vault/Packer."
+  type        = string
+  default     = ""
 }
 
 # ── Networking ───────────────────────────────────────────────────

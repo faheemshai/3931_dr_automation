@@ -31,10 +31,10 @@ existing_vpc_name_dr    = ""
 existing_subnet_name_dr = ""
 
 # ── Packer golden images ──────────────────────────────────────────
-# Last successful build: 2026-08-30  ID: r006-9bf1873d-437f-4fb0-82ce-7439afcafb3c
-golden_image_name_us_south = "rhel92-golden-20260830091707-us-south"
-# eu-de build not yet run — using us-south image as placeholder
-golden_image_name_eu_de    = "rhel92-golden-20260830091707-us-south"
+# If left as empty "", they resolve dynamically from HCP Packer.
+# Manual override (our newly built golden image ID):
+golden_image_id_us_south = "r006-8cdd9831-4f6d-481b-884c-4dd62121ed0c"
+golden_image_id_eu_de    = "r006-8cdd9831-4f6d-481b-884c-4dd62121ed0c" # fallback during Task 1
 
 # ── VSI ──────────────────────────────────────────────────────────
 vsi_count   = 1

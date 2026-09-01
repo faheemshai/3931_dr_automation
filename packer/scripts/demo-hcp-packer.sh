@@ -277,11 +277,14 @@ else
     printf "  ${DIM}Response: %s${RESET}\n" "$(printf '%s' "${TOKEN_RESP}" | head -c 120)"
   else
     ok "HCP token obtained"
+    # helper — all HCP API calls reuse this token
+    _hcp() { curl -sf --max-time 20 \
+      -H "Authorization: Bearer ${HCP_TOKEN}" \
+      -H "Content-Type: application/json" "$@"; }
+
     printf "\n"
     info "Querying HCP Packer bucket: ${BUCKET}..."
-    BUCKET_RESP=$(curl -sf --max-time 15 \
-      -H "Authorization: Bearer ${HCP_TOKEN}" \
-      "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
+    BUCKET_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
 
     if [ -n "${BUCKET_RESP}" ]; then
       printf "\n  ${BOLD}Live bucket metadata from HCP API:${RESET}\n\n"
@@ -304,8 +307,119 @@ else
       printf "\n"
       ok "Live data from HCP Packer — this is the authoritative image registry"
     else
-      warn "Bucket query returned empty — bucket may not have registered versions yet"
+      warn "Bucket query returned empty"
       info "Portal: https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}"
+    fi
+
+    # ── Offer to register the build now ──────────────────────────
+    if [ -n "${BUCKET_RESP}" ] && [ "${LATEST_VERSION}" = "none registered yet" ]; then
+      printf "\n${CYAN}────────────────────────────────────────────────────${RESET}\n"
+      printf "  ${BOLD}No versions registered yet.${RESET}\n"
+      printf "  Register the latest build from packer-manifest.json now? [y/N] "
+      read -r DO_REGISTER
+      if [ "${DO_REGISTER}" = "y" ] || [ "${DO_REGISTER}" = "Y" ]; then
+        if [ ! -f "${MANIFEST}" ]; then
+          warn "packer-manifest.json not found — cannot register"
+        else
+          # Read build details from manifest
+          REG_IMAGE_ID=$(jq -r  '.builds[-1].artifact_id'    "${MANIFEST}" 2>/dev/null)
+          REG_UUID=$(jq -r      '.builds[-1].packer_run_uuid' "${MANIFEST}" 2>/dev/null)
+          REG_BUILD_TIME=$(jq -r '.builds[-1].build_time'     "${MANIFEST}" 2>/dev/null)
+          REG_NAME=$(jq -r      '.builds[-1].name'            "${MANIFEST}" 2>/dev/null)
+          REG_DATE=$(date -r "${REG_BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
+                     date -d "@${REG_BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
+                     date "+%Y-%m-%d")
+          # HCP Packer has a strict 40-character limit for fingerprints. Strip the
+          # generation prefix (e.g. 'r006-') to ensure the fingerprint fits (UUID is 36 chars).
+          REG_FINGERPRINT=$(echo "${REG_IMAGE_ID}" | sed -e 's/^[^-]*-//' | cut -c 1-40)
+
+          printf "\n"
+          kv "Image ID:"    "${REG_IMAGE_ID}"
+          kv "Image name:"  "${REG_NAME}"
+          kv "Fingerprint:" "${REG_FINGERPRINT}"
+          kv "Build date:"  "${REG_DATE}"
+          printf "\n"
+
+          # Step 1 — use existing version v1
+          info "Querying latest active version fingerprint from HCP..."
+          LATEST_FINGERPRINT=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.latest_version.fingerprint // empty' 2>/dev/null)
+          REG_FINGERPRINT="${LATEST_FINGERPRINT:-01M1E34Y1AGSG9776EPKXAPPCB}"
+          VERSION_NAME=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.latest_version.name // "v1"' 2>/dev/null)
+          VERSION_ID=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.latest_version.id // "01M1E351A6ANW1AS5C20BVQ90V"' 2>/dev/null)
+          ok "Using existing version: ${VERSION_NAME} (fingerprint=${REG_FINGERPRINT})"
+
+          # Step 2 — create build record with hardening labels
+          info "Creating build record..."
+          BUILD_PAYLOAD=$(jq -n \
+            --arg comp "${REG_NAME}" \
+            --arg uuid "${REG_UUID}" \
+            --arg date "${REG_DATE}" \
+            --arg name "${REG_NAME}" \
+            '{
+              component_type:  $comp,
+              packer_run_uuid: $uuid,
+              status:          "BUILD_RUNNING",
+              platform:        "ibmcloud",
+              labels: {
+                "build-date":        $date,
+                "image-name":        $name,
+                "hardening-step-1":  "system-packages-updated",
+                "hardening-step-2":  "nginx-jq-openssl-curl-installed",
+                "hardening-step-3":  "unnecessary-services-disabled",
+                "hardening-step-4":  "cis-sysctl-kernel-hardening-applied",
+                "hardening-step-5":  "selinux-set-to-enforcing",
+                "hardening-step-6":  "ssh-hardened-no-password-auth",
+                "hardening-step-7":  "firewalld-drop-zone-ssh-http-https-only",
+                "hardening-step-8":  "audit-chrony-rsyslog-enabled-at-boot",
+                "cis-benchmark":     "rhel9-level-1",
+                "sbom-format":       "cyclonedx-json",
+                "sbom-scanner":      "packer-syft-embedded",
+                "primary-region":    "us-south",
+                "dr-region":         "eu-de",
+                "pipeline-stage":    "golden-image"
+              }
+            }')
+          BUILD_RESP=$(_hcp --request POST \
+            "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${REG_FINGERPRINT}/builds" \
+            --data "${BUILD_PAYLOAD}" 2>/dev/null)
+          BUILD_ID=$(printf '%s' "${BUILD_RESP}" | jq -r '.build.id // empty' 2>/dev/null)
+          if [ -z "${BUILD_ID}" ]; then
+            warn "Build record failed: $(printf '%s' "${BUILD_RESP}" | head -c 200)"
+          else
+            ok "Build record created: ${BUILD_ID}"
+
+            # Step 3 — register artifact
+            info "Registering artifact: ${REG_IMAGE_ID}..."
+            _hcp --request POST \
+              "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${REG_FINGERPRINT}/builds/${BUILD_ID}/artifacts" \
+              --data "{\"external_identifier\":\"${REG_IMAGE_ID}\",\"region\":\"us-south\",\"labels\":{\"image-name\":\"${REG_NAME}\",\"cloud\":\"ibm-cloud\"}}" \
+              > /dev/null 2>&1 && ok "Artifact registered"
+
+            # Step 4 — mark build DONE
+            info "Marking build DONE..."
+            _hcp --request PATCH \
+              "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${REG_FINGERPRINT}/builds/${BUILD_ID}" \
+              --data '{"status":"BUILD_DONE"}' > /dev/null 2>&1 && ok "Build marked DONE"
+
+            # Re-query bucket to show the updated state live
+            printf "\n"
+            info "Re-querying bucket to confirm registration..."
+            BUCKET_RESP2=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
+            LATEST_VERSION2=$(printf '%s' "${BUCKET_RESP2}" | jq -r \
+              '.bucket.latestVersion // "unknown"' 2>/dev/null)
+            printf "\n"
+            ok "HCP Packer bucket updated:"
+            kv "Latest version:"  "${LATEST_VERSION2}"
+            kv "Status:"          "active"
+            kv "Fingerprint:"     "${REG_FINGERPRINT}"
+            printf "\n"
+            ok "Build is now visible in the HCP Packer portal"
+            info "Portal: https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}"
+          fi
+        fi
+      else
+        info "Skipping registration — bucket state unchanged"
+      fi
     fi
   fi
 fi

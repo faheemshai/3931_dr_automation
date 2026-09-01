@@ -22,6 +22,27 @@ module "vault_integration" {
   secret_path = var.vault_secret_path
 }
 
+# ── 2. HCP Packer — read golden image artifacts dynamically ──────
+data "hcp_packer_artifact" "golden_primary" {
+  bucket_name  = "rhel92-golden"
+  platform     = "ibmcloud"
+  region       = var.ibm_region_primary
+  channel_name = "latest"
+}
+
+data "hcp_packer_artifact" "golden_dr" {
+  bucket_name  = "rhel92-golden"
+  platform     = "ibmcloud"
+  region       = var.ibm_region_dr
+  channel_name = "latest"
+}
+
+locals {
+  # Dynamic lookup from HCP Packer with manual override fallback
+  image_id_primary = var.golden_image_id_us_south != "" ? var.golden_image_id_us_south : data.hcp_packer_artifact.golden_primary.external_identifier
+  image_id_dr      = var.golden_image_id_eu_de != "" ? var.golden_image_id_eu_de : data.hcp_packer_artifact.golden_dr.external_identifier
+}
+
 # ═══════════════════════════════════════════════════════════════
 # PRIMARY REGION — us-south
 # ═══════════════════════════════════════════════════════════════
@@ -70,8 +91,8 @@ module "vsi_primary" {
   vsi_count    = var.vsi_count
   vsi_profile  = var.vsi_profile
 
-  # Golden image from Packer — NOT a stock image
-  image_name   = var.golden_image_name_us_south
+  # Golden image from Packer — resolved dynamically
+  image_id     = local.image_id_primary
 
   vpc_id       = module.networking_primary.vpc_id
   subnet_id    = module.networking_primary.subnet_id
@@ -135,8 +156,8 @@ module "vsi_dr" {
   vsi_count    = var.vsi_count
   vsi_profile  = var.vsi_profile
 
-  # Same golden image family — eu-de variant (same hardening, different region)
-  image_name   = var.golden_image_name_eu_de
+  # Same golden image family — eu-de variant — resolved dynamically
+  image_id     = local.image_id_dr
 
   vpc_id       = module.networking_dr.vpc_id
   subnet_id    = module.networking_dr.subnet_id

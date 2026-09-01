@@ -33,8 +33,8 @@ variable "vsi_profile" {
   type        = string
 }
 
-variable "image_name" {
-  description = "IBM Cloud stock image name for the VSI"
+variable "image_id" {
+  description = "IBM Cloud image ID (UUID) for the VSI"
   type        = string
 }
 

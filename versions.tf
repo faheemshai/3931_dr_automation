@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    hcp = {
+      source  = "hashicorp/hcp"
+      version = "~> 0.80"
+    }
   }
 
   # ── Terraform Enterprise remote backend ─────────────────────────

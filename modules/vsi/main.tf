@@ -15,11 +15,10 @@ locals {
   name_prefix = "${var.project}-${var.environment}"
 }
 
-# ── Look up the Packer golden image by name ───────────────────────
-# image_name is set from golden_image_name_us_south / golden_image_name_eu_de
-# in terraform.tfvars — tracing directly back to the Packer build.
+# ── Look up the Packer golden image by ID ───────────────────────
+# image_id is set dynamically from HCP Packer or manually overridden.
 data "ibm_is_image" "golden" {
-  name = var.image_name
+  identifier = var.image_id
 }
 
 # ── VSI instances ────────────────────────────────────────────────
@@ -53,7 +52,7 @@ resource "ibm_is_instance" "app" {
     "managed-by:terraform",
     "dr-role:${var.dr_role}",
     "dr-pair:${var.dr_pair}",
-    "golden-image:${var.image_name}",
+    "golden-image:${var.image_id}",
     "index:${count.index + 1}",
   ]
 }

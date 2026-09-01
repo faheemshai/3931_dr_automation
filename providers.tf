@@ -56,3 +56,6 @@ provider "ibm" {
   region           = var.ibm_region_primary
   ibmcloud_api_key = local.ibm_api_key
 }
+
+# ── HCP Provider (HCP Packer Integration) ────────────────────────
+provider "hcp" {}
