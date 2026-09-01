@@ -162,16 +162,18 @@ ok "Version created: ${VERSION_ID}"
 sleep 5
 
 # ── Step 3: Create build record with hardening labels ─────────
-info "Creating build record..."
+# ── Step 3: Create build record with dynamic artifacts ─────────
+info "Creating build record with registered artifacts..."
 BUILD_PAYLOAD=$(jq -n \
   --arg comp   "${BUILD_NAME}" \
   --arg uuid   "${RUN_UUID}" \
   --arg date   "${BUILD_DATE}" \
   --arg region "${REGION}" \
+  --arg art_id "${ARTIFACT_ID}" \
   '{
     component_type:  $comp,
     packer_run_uuid: $uuid,
-    status:          "BUILD_RUNNING",
+    status:          "BUILD_DONE",
     platform:        "ibmcloud",
     labels: {
       "build-date":        $date,
@@ -188,7 +190,13 @@ BUILD_PAYLOAD=$(jq -n \
       "sbom-format":       "cyclonedx-json",
       "sbom-scanner":      "packer-syft-embedded",
       "pipeline-stage":    "golden-image"
-    }
+    },
+    artifacts: [
+      {
+        external_identifier: $art_id,
+        region:              $region
+      }
+    ]
   }')
 BUILD_RESP=$(_hcp --request POST \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}/builds" \
@@ -198,27 +206,9 @@ if [ -z "${BUILD_ID}" ]; then
   warn "Build record failed: $(printf '%s' "${BUILD_RESP}" | head -c 300)"
   exit 0
 fi
-ok "Build record created: ${BUILD_ID}"
+ok "Build record created: ${BUILD_ID} (with artifact: ${ARTIFACT_ID})"
 
-# ── Step 4: Register artifact ─────────────────────────────────
-info "Registering artifact: ${ARTIFACT_ID}..."
-_hcp --request POST \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}/builds/${BUILD_ID}/artifacts" \
-  --data "{
-    \"external_identifier\": \"${ARTIFACT_ID}\",
-    \"region\": \"${REGION}\",
-    \"labels\": {\"cloud\": \"ibm-cloud\", \"region\": \"${REGION}\"}
-  }" > /dev/null 2>&1
-ok "Artifact registered"
-
-# ── Step 5: Mark build DONE ───────────────────────────────────
-info "Marking build DONE..."
-_hcp --request PATCH \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}/builds/${BUILD_ID}" \
-  --data '{"status":"BUILD_DONE"}' > /dev/null 2>&1
-ok "Build marked DONE"
-
-# ── Step 6: Complete version ──────────────────────────────────
+# ── Step 4: Complete version ──────────────────────────────────
 info "Completing version..."
 _hcp --request PATCH \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}" \
