@@ -126,17 +126,30 @@ if [ -z "${BUCKET_OK}" ] && [ -n "${HAS_ERROR}" ]; then
 fi
 ok "Bucket reachable: ${BUCKET}"
 
-# ── Step 2: Create version ────────────────────────────────────
-info "Creating version (fingerprint=${RUN_UUID})..."
-VER_RESP=$(_hcp --request POST \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
-  --data "{\"fingerprint\":\"${RUN_UUID}\"}" 2>/dev/null)
-VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
-if [ -z "${VERSION_ID}" ]; then
-  warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
-  exit 0
+# ── Step 2: Get or create version ────────────────────────────
+# Check if a version with this fingerprint already exists (e.g. from a
+# previous failed run) so we can reuse it instead of creating a duplicate.
+info "Checking for existing version (fingerprint=${RUN_UUID})..."
+VERSIONS_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" 2>/dev/null)
+VERSION_ID=$(printf '%s' "${VERSIONS_RESP}" | jq -r \
+  ".versions[]? | select(.fingerprint==\"${RUN_UUID}\") | .id" 2>/dev/null | head -1)
+
+if [ -n "${VERSION_ID}" ]; then
+  ok "Existing version found: ${VERSION_ID} — reusing"
+else
+  info "Creating new version..."
+  VER_RESP=$(_hcp --request POST \
+    "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
+    --data "{\"fingerprint\":\"${RUN_UUID}\"}" 2>/dev/null)
+  VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
+  if [ -z "${VERSION_ID}" ]; then
+    warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
+    exit 0
+  fi
+  ok "Version created: ${VERSION_ID}"
+  # Give HCP a moment to fully commit the new version
+  sleep 3
 fi
-ok "Version created: ${VERSION_ID}"
 
 # ── Step 3: Create build record with hardening labels ─────────
 info "Creating build record..."
