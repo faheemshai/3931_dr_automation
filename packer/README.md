@@ -16,9 +16,8 @@ packer/
 ├── student.pkrvars.hcl         # YOUR working copy — gitignored, never committed
 │
 ├── scripts/
-│   ├── set-build-env.sh        # SOURCE this before every build — loads creds from Vault
 │   ├── harden-rhel92.sh        # Runs inside the build VSI — 8-step CIS hardening
-│   └── showcase-packer-enterprise.sh  # Live demo script for TechXchange presentation
+│   └── demo-hcp-packer.sh      # Live demo script for TechXchange presentation
 │
 └── sbom/
     ├── .gitkeep                # Keeps directory tracked in git
@@ -34,8 +33,8 @@ packer/
 cp student.pkrvars.hcl.example student.pkrvars.hcl
 # Edit student.pkrvars.hcl — set student_id (ibm_api_key pre-filled for lab)
 
-# 2. Load all credentials from Vault (ONCE per shell session)
-source packer/scripts/set-build-env.sh
+# 2. Export the IBM API key from Vault
+export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
 
 # 3. Initialise plugins (first time only)
 cd packer/
@@ -50,14 +49,14 @@ packer build -var-file=student.pkrvars.hcl .
 
 After a successful build, the golden image appears in:
 - **IBM Cloud console** → VPC Infrastructure → Custom Images
-- **HCP Packer portal** → `rhel92-golden` bucket → Versions tab
+- **`packer-manifest.json`** — full build record with image ID, timestamp, run UUID
 
 ---
 
 ## What gets built
 
 The build VSI runs [`scripts/harden-rhel92.sh`](scripts/harden-rhel92.sh) which applies
-8 CIS-aligned hardening steps, then the image is captured and registered.
+8 CIS-aligned hardening steps, then the image is captured.
 
 | Step | What happens |
 |------|-------------|
@@ -79,51 +78,37 @@ LAB_STUDENT_ID=student-XX
 
 A **CycloneDX SBOM** (Software Bill of Materials) is generated automatically
 using `packer sbom-generate` (embedded Syft scanner) and saved to `sbom/`.
-The SBOM inventories every installed package and is attached to the HCP Packer
-version so security teams can scan for CVEs without accessing the live image.
+The SBOM inventories every installed package and is available for CVE scanning
+tools such as Grype, Trivy, and Snyk.
 
 ---
 
-## Credentials — where each one lives
+## HCP Packer registry
 
-| Credential | Where to set it | Why |
-|---|---|---|
-| `ibm_api_key` | `student.pkrvars.hcl` | Packer input variable — HCL substitution |
-| `student_id`, `subnet_id`, etc. | `student.pkrvars.hcl` | Same — normal Packer variables |
-| `HCP_CLIENT_ID` | env var — `set-build-env.sh` handles it | HCP binary-level auth, no HCL variable exists |
-| `HCP_CLIENT_SECRET` | env var — `set-build-env.sh` handles it | Same, plus it's a secret |
-| `HCP_ORGANIZATION_ID` | env var — pre-filled in `set-build-env.sh` | Required by Packer for HCP API routing |
-| `HCP_PROJECT_ID` | env var — pre-filled in `set-build-env.sh` | Same |
+The IBM Cloud Packer plugin (v3.7.0) does not implement the HCP artifact
+interface, so the `hcp_packer_registry` build block cannot be used. Instead:
 
-> **Why `source` not `bash`?**
-> `bash set-build-env.sh` runs in a subprocess — env vars are lost when it exits.
-> `source set-build-env.sh` sets vars in your current shell — they persist for `packer build`.
+1. The build writes `packer-manifest.json` with the IBM Cloud image ID
+2. The **lab instructor** registers the build in the HCP Packer portal UI
+   using the image ID and fingerprint from `packer-manifest.json`
+3. Students interact with the registered version via `demo-hcp-packer.sh`
 
----
-
-## HCP Packer portal
-
+**Portal URL:**
 ```
 https://portal.cloud.hashicorp.com/orgs/d964990b-39d2-42d2-b37b-bb8ce075c701
   /projects/48e86032-f0da-45af-a68d-67c67d1f383b
   /packer/buckets/rhel92-golden
 ```
 
-**Before** running `set-build-env.sh` + build: bucket exists, `Versions = 0`, all fields show `—`.
-
-**After**: `Newest version: v1`, `Status: active`, hardening labels visible in Version
-details tab, SBOM attached.
-
 ---
 
 ## After the build — update Terraform
 
-Copy the image name from the build output into `terraform.tfvars`:
+Copy the image name from the manifest into `terraform.tfvars`:
 
 ```bash
-# Get the image name from the manifest
-jq -r '.builds[-1].artifact_id' packer/packer-manifest.json
-# Then: ibmcloud is image <id> --output json | jq -r '.name'
+# Get the image name
+jq -r '.builds[-1].name' packer/packer-manifest.json
 ```
 
 Update `terraform.tfvars`:
@@ -138,9 +123,9 @@ golden_image_name_us_south = "rhel92-golden-<timestamp>-us-south"
 Run the full TechXchange showcase from anywhere in the repo:
 
 ```bash
-bash packer/scripts/showcase-packer-enterprise.sh
+sh packer/scripts/demo-hcp-packer.sh
 ```
 
-10 slides covering: the problem open-source Packer can't solve, Vault secret
-injection, the golden image artifact, CIS hardening evidence, HCP registry
-visibility (before/after), SBOM supply chain, and the Enterprise advantage table.
+8 sections covering: the problem open-source Packer can't solve, Vault secret
+injection, the golden image artifact, CIS hardening evidence, SBOM supply chain,
+live HCP registry query, Terraform closed loop, and the Enterprise advantage table.

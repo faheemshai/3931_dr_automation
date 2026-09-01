@@ -20,9 +20,10 @@
 #   packer validate -var-file=student.pkrvars.hcl .
 #   packer build   -var-file=student.pkrvars.hcl .
 #
-# After the build, image IDs appear in packer-manifest.json and
-# in the HCP Packer registry UI under the "rhel92-golden" bucket.
-# Supply them as Terraform variables in Task 2.
+# After the build, image IDs appear in packer-manifest.json.
+# Register them in the HCP Packer registry UI manually, or let
+# the instructor pre-register them as part of lab setup.
+# Supply the golden image name as Terraform variables in Task 2.
 # ---------------------------------------------------------------
 
 # ── Required plugin ──────────────────────────────────────────────
@@ -133,64 +134,15 @@ build {
   name = "rhel92-golden"
 
   # ── HCP Packer Registry ──────────────────────────────────────
-  # WHY THIS BLOCK EXISTS:
-  #   A successful packer build alone does NOT make anything visible
-  #   in HCP Cloud UI. The build runs locally and saves image_id to
-  #   packer-manifest.json — that is purely local output.
+  # NOTE: The IBM Cloud Packer plugin (v3.7.0) does not implement
+  # the HCP artifact interface required for the hcp_packer_registry
+  # block. Attempting to use it produces:
+  #   "No HCP Packer-compatible artifacts were found for the build"
   #
-  #   This block tells Packer to ALSO:
-  #     1. Authenticate to HCP (via HCP_CLIENT_ID + HCP_CLIENT_SECRET)
-  #     2. Create/update the "rhel92-golden" bucket in your HCP project
-  #     3. Register a new Version (iteration) for this build fingerprint
-  #     4. Attach the IBM Cloud image ID as the artifact
-  #     5. Upload the SBOM from the hcp-sbom provisioner to that version
-  #     6. Mark the version COMPLETE so it shows Published status
-  #
-  # NOTE: The IBM Cloud Packer plugin is NOT HCP-ready, which means the
-  #   artifact metadata push will show a warning but the version,
-  #   labels, and SBOM will still register correctly.
-  #   This is a known limitation of the IBM Cloud plugin.
-  #
-  # REQUIRED env vars before packer build (never hard-code these):
-  #   export HCP_CLIENT_ID="d74d3df1cded0965ef6b99ea4c3a2093"
-  #   export HCP_CLIENT_SECRET="$(vault kv get -namespace=admin \
-  #     -mount=kv -field=client_secret HCP_packer)"
-  #   export HCP_ORGANIZATION_ID="d964990b-39d2-42d2-b37b-bb8ce075c701"
-  #   export HCP_PROJECT_ID="48e86032-f0da-45af-a68d-67c67d1f383b"
-  hcp_packer_registry {
-    bucket_name = "rhel92-golden"
-    description = "Hardened RHEL 9.2 golden image for LAB-3931 DR pipeline"
-
-    # bucket_labels: permanent metadata visible on the bucket overview page
-    bucket_labels = {
-      "lab"        = "lab-3931"
-      "managed-by" = "packer"
-      "os"         = "rhel-9.2"
-      "base-image" = var.base_image_name
-      "student-id" = var.student_id
-    }
-
-    # build_labels: per-version metadata visible in the Version details tab
-    # These prove WHAT was hardened in this specific build iteration.
-    build_labels = {
-      "build-date"        = local.build_date
-      "build-timestamp"   = local.timestamp
-      "hardening-step-1"  = "system-packages-updated"
-      "hardening-step-2"  = "nginx-jq-openssl-curl-installed"
-      "hardening-step-3"  = "unnecessary-services-disabled"
-      "hardening-step-4"  = "cis-sysctl-kernel-hardening-applied"
-      "hardening-step-5"  = "selinux-set-to-enforcing"
-      "hardening-step-6"  = "ssh-hardened-no-password-auth"
-      "hardening-step-7"  = "firewalld-drop-zone-ssh-http-https-only"
-      "hardening-step-8"  = "audit-chrony-rsyslog-enabled-at-boot"
-      "cis-benchmark"     = "rhel9-level-1"
-      "sbom-format"       = "cyclonedx-json"
-      "sbom-scanner"      = "packer-syft-embedded"
-      "primary-region"    = "us-south"
-      "dr-region"         = "eu-de"
-      "pipeline-stage"    = "golden-image"
-    }
-  }
+  # HCP registration is handled manually by the lab instructor via
+  # the HCP Packer portal UI using the image ID from packer-manifest.json.
+  # Students view the registered image via demo-hcp-packer.sh.
+  # ── ─────────────────────────────────────────────────────────
 
   # Include eu-de source only when build_eu_de = true
   sources = var.build_eu_de ? [
