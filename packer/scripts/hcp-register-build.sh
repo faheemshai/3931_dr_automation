@@ -111,7 +111,34 @@ _hcp() {
     -H "Content-Type: application/json" "$@"
 }
 
-# ── Step 1: Create version ────────────────────────────────────
+# ── Step 1: Ensure bucket exists (create if missing) ─────────
+info "Checking bucket '${BUCKET}'..."
+BUCKET_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
+BUCKET_EXISTS=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.slug // empty' 2>/dev/null)
+
+if [ -z "${BUCKET_EXISTS}" ]; then
+  info "Bucket not found — creating it..."
+  CREATE_RESP=$(_hcp --request POST \
+    "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets" \
+    --data "{
+      \"slug\": \"${BUCKET}\",
+      \"labels\": {
+        \"lab\":        \"lab-3931\",
+        \"os\":         \"rhel-9.2\",
+        \"managed-by\": \"packer\"
+      }
+    }" 2>/dev/null)
+  BUCKET_SLUG=$(printf '%s' "${CREATE_RESP}" | jq -r '.bucket.slug // empty' 2>/dev/null)
+  if [ -z "${BUCKET_SLUG}" ]; then
+    warn "Bucket create failed: $(printf '%s' "${CREATE_RESP}" | head -c 300)"
+    exit 0
+  fi
+  ok "Bucket created: ${BUCKET_SLUG}"
+else
+  ok "Bucket exists: ${BUCKET_EXISTS}"
+fi
+
+# ── Step 2: Create version ────────────────────────────────────
 info "Creating version (fingerprint=${RUN_UUID})..."
 VER_RESP=$(_hcp --request POST \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
@@ -123,7 +150,7 @@ if [ -z "${VERSION_ID}" ]; then
 fi
 ok "Version created: ${VERSION_ID}"
 
-# ── Step 2: Create build record with hardening labels ─────────
+# ── Step 3: Create build record with hardening labels ─────────
 info "Creating build record..."
 BUILD_PAYLOAD=$(jq -n \
   --arg comp   "${BUILD_NAME}" \
@@ -162,7 +189,7 @@ if [ -z "${BUILD_ID}" ]; then
 fi
 ok "Build record created: ${BUILD_ID}"
 
-# ── Step 3: Register artifact ─────────────────────────────────
+# ── Step 4: Register artifact ─────────────────────────────────
 info "Registering artifact: ${ARTIFACT_ID}..."
 _hcp --request POST \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}/builds/${BUILD_ID}/artifacts" \
@@ -173,14 +200,14 @@ _hcp --request POST \
   }" > /dev/null 2>&1
 ok "Artifact registered"
 
-# ── Step 4: Mark build DONE ───────────────────────────────────
+# ── Step 5: Mark build DONE ───────────────────────────────────
 info "Marking build DONE..."
 _hcp --request PATCH \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}/builds/${BUILD_ID}" \
   --data '{"status":"BUILD_DONE"}' > /dev/null 2>&1
 ok "Build marked DONE"
 
-# ── Step 5: Complete version ──────────────────────────────────
+# ── Step 6: Complete version ──────────────────────────────────
 info "Completing version..."
 _hcp --request PATCH \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${VERSION_ID}" \
