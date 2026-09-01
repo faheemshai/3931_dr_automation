@@ -33,8 +33,8 @@ existing_subnet_name_dr = ""
 # ── Packer golden images ──────────────────────────────────────────
 # If left as empty "", they resolve dynamically from HCP Packer.
 # Manual override (our newly built golden image ID):
-golden_image_id_us_south = "r006-8cdd9831-4f6d-481b-884c-4dd62121ed0c"
-golden_image_id_eu_de    = "r006-8cdd9831-4f6d-481b-884c-4dd62121ed0c" # fallback during Task 1
+golden_image_id_us_south = "r006-77571d18-ba11-4fbc-af9e-0ed9e3312190"
+golden_image_id_eu_de    = "r006-77571d18-ba11-4fbc-af9e-0ed9e3312190" # fallback during Task 1
 
 # ── VSI ──────────────────────────────────────────────────────────
 vsi_count   = 1

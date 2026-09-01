@@ -24,17 +24,17 @@ module "vault_integration" {
 
 # ── 2. HCP Packer — read golden image artifacts dynamically ──────
 data "hcp_packer_artifact" "golden_primary" {
-  bucket_name  = "rhel92-golden"
-  platform     = "ibmcloud"
-  region       = var.ibm_region_primary
-  channel_name = "latest"
+  bucket_name         = "rhel92-golden"
+  platform            = "ibmcloud"
+  region              = var.ibm_region_primary
+  version_fingerprint = "fp-20260901180747"
 }
 
 data "hcp_packer_artifact" "golden_dr" {
-  bucket_name  = "rhel92-golden"
-  platform     = "ibmcloud"
-  region       = var.ibm_region_dr
-  channel_name = "latest"
+  bucket_name         = "rhel92-golden"
+  platform            = "ibmcloud"
+  region              = var.ibm_region_dr
+  version_fingerprint = "fp-20260901180747"
 }
 
 locals {

@@ -345,7 +345,7 @@ else
           info "Creating version (fingerprint=${REG_FINGERPRINT})..."
           VER_RESP=$(_hcp --request POST \
             "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
-            --data "{\"fingerprint\":\"${REG_FINGERPRINT}\"}" 2>/dev/null)
+            --data "{\"fingerprint\":\"${REG_FINGERPRINT}\",\"template_type\":\"HCL2\"}" 2>/dev/null)
           VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
           if [ -z "${VERSION_ID}" ]; then
             warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 200)"

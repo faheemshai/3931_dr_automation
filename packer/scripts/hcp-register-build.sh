@@ -151,7 +151,7 @@ fi
 info "Creating version (fingerprint=${FINGERPRINT})..."
 VER_RESP=$(_hcp --request POST \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
-  --data "{\"fingerprint\":\"${FINGERPRINT}\"}" 2>/dev/null)
+  --data "{\"fingerprint\":\"${FINGERPRINT}\",\"template_type\":\"HCL2\"}" 2>/dev/null)
 VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
 if [ -z "${VERSION_ID}" ]; then
   warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
