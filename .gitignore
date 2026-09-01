@@ -30,3 +30,8 @@ ent_demo_ed25519.pub
 .idea/
 .vscode/
 .bob/
+
+# ── Packer build artefacts ───────────────────────────────────────
+packer/packer-manifest.json
+packer/sbom/*.json
+# packer/sbom/.gitkeep is intentionally tracked

@@ -166,7 +166,29 @@ build {
     ]
   }
 
-  # ── Step 4: Pre-capture cleanup ─────────────────────────────
+  # ── Step 4: Generate SBOM (Software Bill of Materials) ───────
+  # Uses hcp-sbom provisioner with auto_generate=true.
+  # Packer uploads its own binary to the VSI, runs packer sbom-generate
+  # (embedded Syft SDK), produces CycloneDX JSON, downloads it locally.
+  #
+  # ENTERPRISE SHOWCASE:
+  #   - Every package on the golden image is inventoried before capture
+  #   - SBOM saved to packer/sbom/ — auditable, version-controlled
+  #   - When HCP Packer registry is active: SBOM auto-attached to version
+  #   - Open-source Packer: no SBOM capability whatsoever
+  #
+  # Note: auto_generate uploads the Packer binary to the VSI temporarily
+  # and cleans up after — no extra tools needed on the build host.
+  provisioner "hcp-sbom" {
+    auto_generate = true
+    scan_path     = "/"
+    destination   = "${path.root}/sbom/"
+    sbom_name     = "rhel92-golden-${local.timestamp}"
+    # vpcuser has passwordless sudo — matches our SSH username
+    execute_command = "chmod +x {{.Path}} && sudo {{.Path}} sbom-generate {{.Args}} {{.ScanPath}} > {{.Output}}"
+  }
+
+  # ── Step 5: Pre-capture cleanup ─────────────────────────────
   provisioner "shell" {
     execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
     inline = [
