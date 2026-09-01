@@ -1,62 +1,83 @@
 # ---------------------------------------------------------------
 # packer/student.pkrvars.hcl.example
 #
-# COPY to student.pkrvars.hcl and fill in your values.
+# LAB-3931 — Student variable file template
+#
+# STEP 1 — Copy this file:
 #   cp student.pkrvars.hcl.example student.pkrvars.hcl
 #
-# student.pkrvars.hcl is gitignored — NEVER commit it.
+# STEP 2 — Fill in YOUR values in student.pkrvars.hcl
 #
-# ── HCP Packer authentication — set in your shell, NOT here ──────
+# STEP 3 — Load credentials from Vault (do this ONCE per shell):
+#   source packer/scripts/set-build-env.sh
 #
-#   Retrieve from Vault and export before every packer build:
-#
-#   export HCP_CLIENT_ID=$(vault kv get -namespace=admin \
-#     -mount=kv -field=client_id HCP_packer)
-#   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin \
-#     -mount=kv -field=client_secret HCP_packer)
-#
-# ── IBM Cloud API key — also from Vault ──────────────────────────
-#
-#   export IBM_API_KEY=$(vault kv get -namespace=admin \
-#     -mount=kv -field=ibm_api_key IBM_cloud)
-#
-# ── Full build workflow ───────────────────────────────────────────
-#
+# STEP 4 — Run the build:
 #   cd packer/
-#   # export the three env vars above
-#   packer init .
 #   packer validate -var-file=student.pkrvars.hcl .
 #   packer build   -var-file=student.pkrvars.hcl .
 #
-# ── After build ───────────────────────────────────────────────────
-#   Image IDs are written to packer-manifest.json (gitignored).
-#   Copy them into terraform/terraform.tfvars for Task 2:
-#     golden_image_id_us_south = "..."
-#     golden_image_id_eu_de    = "..."
+# ── What goes IN this file vs what goes in the shell ────────────
+#
+#   IN THIS FILE (Packer input variables):
+#     ibm_api_key            ← IBM Cloud API key
+#     student_id             ← your student number
+#     ibm_resource_group_id  ← your IBM Cloud resource group
+#     base_image_name        ← which RHEL 9 base image to use
+#     subnet_id_us_south     ← subnet for the build VSI
+#     build_eu_de            ← true/false for DR region build
+#
+#   IN YOUR SHELL only — set-build-env.sh handles these:
+#     HCP_CLIENT_ID          ← cannot go in a var file (HCP binary-level auth)
+#     HCP_CLIENT_SECRET      ← cannot go in a var file (HCP binary-level auth)
+#     HCP_ORGANIZATION_ID    ← cannot go in a var file
+#     HCP_PROJECT_ID         ← cannot go in a var file
+#
+#   WHY can't HCP vars go in this file?
+#     The hcp_packer_registry block in the build template is processed by
+#     the Packer binary itself, not by your HCL template. Packer reads
+#     HCP credentials exclusively from environment variables — there is no
+#     HCL variable declaration for them. This is by design (security boundary).
+#     The set-build-env.sh script reads them from Vault and exports them so
+#     you never have to type or see the actual secret values.
+#
+# ── Security rules ───────────────────────────────────────────────
+#   student.pkrvars.hcl  is gitignored — NEVER commit it.
+#   If you accidentally commit it, Vault Radar will block the push.
 # ---------------------------------------------------------------
 
-# ── Student ID ───────────────────────────────────────────────────
+# ── Your student ID ──────────────────────────────────────────────
+# Stamped into /etc/os-release on the golden image.
 student_id = "student-XX"    # ← replace XX with your assigned number
 
 # ── IBM Cloud API key ────────────────────────────────────────────
-# Leave empty to use the IBM_API_KEY env var (recommended):
+# Paste your IBM Cloud API key here.
+# The lab instructor stores it in Vault — retrieve it with:
+#   vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud
+# Or leave empty ("") if you ran set-build-env.sh (it exports IBM_API_KEY).
 ibm_api_key = ""
 
 # ── IBM Cloud resource group ID ──────────────────────────────────
-# ibmcloud resource group <name> --id
-ibm_resource_group_id = ""   # ← e.g. "abc123def456abc123def456abc123de"
+# Get it with: ibmcloud resource group <name> --id
+ibm_resource_group_id = "b93f575887be43e894e861eb336485d3"
 
-# ── Base RHEL 9.2 image ──────────────────────────────────────────
-# ibmcloud is images --visibility public | grep -i rhel-9-2
-base_image_name = "ibm-redhat-9-2-minimal-amd64-9"
+# ── Base RHEL 9 image ────────────────────────────────────────────
+# Use a NON-minimal image for reliable SSH key injection.
+# Check available images: ibmcloud is images --visibility public | grep rhel-9
+base_image_name = "ibm-redhat-9-4-amd64-5"
 
 # ── Image name prefix ────────────────────────────────────────────
+# Timestamp is appended automatically: rhel92-golden-20260901050120-us-south
 image_name_prefix = "rhel92-golden"
 
-# ── Build subnet IDs ─────────────────────────────────────────────
-# These subnets must already exist with a public gateway attached.
-# The lab instructor pre-creates them. Retrieve IDs with:
+# ── Build region control ─────────────────────────────────────────
+# false = us-south only (use for Task 1 testing)
+# true  = both us-south + eu-de in parallel (use for full lab)
+build_eu_de = false
+
+# ── Subnet IDs ───────────────────────────────────────────────────
+# Subnets must have a public gateway attached (needed for dnf updates).
+# Instructor pre-creates these. Get IDs with:
 #   ibmcloud is subnets | grep us-south
 #   ibmcloud is subnets | grep eu-de
-subnet_id_us_south = ""      # ← e.g. "0717-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-subnet_id_eu_de    = ""      # ← e.g. "02c7-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+subnet_id_us_south = "0717-9b0c29d6-a257-4156-ba7a-f8f28f854019"
+subnet_id_eu_de    = ""   # ← fill in when build_eu_de = true

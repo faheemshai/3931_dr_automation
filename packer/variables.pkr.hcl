@@ -3,14 +3,32 @@
 #
 # All Packer input variable declarations for LAB-3931.
 # Values are supplied via student.pkrvars.hcl (gitignored).
+#
+# ── Two types of credentials in this lab ────────────────────────
+#
+# TYPE 1 — Packer input variables (CAN be set in student.pkrvars.hcl):
+#   ibm_api_key    → declared here, read by source blocks in the template
+#
+# TYPE 2 — HCP registry env vars (CANNOT be in student.pkrvars.hcl):
+#   HCP_CLIENT_ID, HCP_CLIENT_SECRET, HCP_ORGANIZATION_ID, HCP_PROJECT_ID
+#   These are read by the Packer binary itself for hcp_packer_registry —
+#   they are NOT Packer input variables and have no HCL declaration.
+#   Use:  source packer/scripts/set-build-env.sh
+#   That script reads all four from Vault and exports them for you.
 # ---------------------------------------------------------------
 
 # ── Authentication ───────────────────────────────────────────────
 variable "ibm_api_key" {
-  description = "IBM Cloud API key for the Packer build. Never hard-coded — supply via student.pkrvars.hcl or env var IBM_API_KEY."
-  type        = string
-  sensitive   = true
-  default     = "${env("IBM_API_KEY")}"
+  description = <<-EOT
+    IBM Cloud API key for the Packer build.
+    Set this in student.pkrvars.hcl (gitignored) — it is safe because
+    the file is never committed. Alternatively leave it empty ("") and
+    set IBM_API_KEY in your shell via set-build-env.sh.
+    env("IBM_API_KEY") is the fallback when the var file value is empty.
+  EOT
+  type      = string
+  sensitive = true
+  default   = "${env("IBM_API_KEY")}"
 }
 
 # ── Student identity ─────────────────────────────────────────────
