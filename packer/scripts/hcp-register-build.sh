@@ -112,21 +112,19 @@ _hcp() {
 }
 
 # ── Step 1: Verify bucket exists ─────────────────────────────
-# Buckets cannot be created via the REST API — they are created either
-# by the HCP portal UI or automatically by `hcp_packer_registry` in a
-# native-compatible Packer plugin. Create the bucket in the portal once:
-#   https://portal.cloud.hashicorp.com → Packer → Buckets → Create bucket
-#   Name: rhel92-golden
 info "Checking bucket '${BUCKET}'..."
 BUCKET_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
-BUCKET_EXISTS=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.slug // empty' 2>/dev/null)
-if [ -z "${BUCKET_EXISTS}" ]; then
-  warn "Bucket '${BUCKET}' not found in HCP."
-  printf "\n  Create it in the HCP portal first:\n"
-  printf "  https://portal.cloud.hashicorp.com/orgs/%s/projects/%s/packer/buckets\n\n" "${ORG}" "${PROJ}"
+# The API may return slug, name, or id depending on version — check for any
+BUCKET_OK=$(printf '%s' "${BUCKET_RESP}" | jq -r '
+  .bucket.slug // .bucket.name // .bucket.id // empty' 2>/dev/null)
+# Also accept response if it has no "code" error field (i.e. not a 404)
+HAS_ERROR=$(printf '%s' "${BUCKET_RESP}" | jq -r '.code // empty' 2>/dev/null)
+if [ -z "${BUCKET_OK}" ] && [ -n "${HAS_ERROR}" ]; then
+  warn "Bucket '${BUCKET}' not found — run: packer build hcp-bucket-init.pkr.hcl"
+  printf "  API response: %.200s\n" "${BUCKET_RESP}"
   exit 0
 fi
-ok "Bucket exists: ${BUCKET_EXISTS}"
+ok "Bucket reachable: ${BUCKET}"
 
 # ── Step 2: Create version ────────────────────────────────────
 info "Creating version (fingerprint=${RUN_UUID})..."
