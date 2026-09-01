@@ -2,17 +2,13 @@
 # packer/rhel92-ibmcloud.pkr.hcl
 #
 # LAB-3931 — Automating Disaster Recovery
-# Builds a hardened RHEL 9.2 golden image and registers it in HCP
-# Packer, pushing to IBM Cloud Image Registry.
+# Builds a hardened RHEL 9.2 golden image on IBM Cloud and registers
+# it in HCP Packer automatically via a post-processor shell-local.
 #
-# Regions built: controlled by var.build_regions
-#   "us-south"       → primary only  (single-region test)
-#   "eu-de"          → DR only
-#   "us-south,eu-de" → both in parallel (full lab build)
-#
-# HCP Packer auth — env vars only, never in this file:
-#   export HCP_CLIENT_ID="..."
-#   export HCP_CLIENT_SECRET="..."
+# HCP Packer auth — export before running packer build:
+#   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
+#   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
+#   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
 #
 # Usage:
 #   cd packer/
@@ -20,10 +16,10 @@
 #   packer validate -var-file=student.pkrvars.hcl .
 #   packer build   -var-file=student.pkrvars.hcl .
 #
-# After the build, image IDs appear in packer-manifest.json.
-# Register them in the HCP Packer registry UI manually, or let
-# the instructor pre-register them as part of lab setup.
-# Supply the golden image name as Terraform variables in Task 2.
+# After the build:
+#   - Image ID is in packer-manifest.json
+#   - Build is automatically registered in HCP Packer (if HCP env vars are set)
+#   - Supply golden_image_name_us_south in terraform.tfvars for Task 2
 # ---------------------------------------------------------------
 
 # ── Required plugin ──────────────────────────────────────────────
@@ -135,13 +131,14 @@ build {
 
   # ── HCP Packer Registry ──────────────────────────────────────
   # NOTE: The IBM Cloud Packer plugin (v3.7.0) does not implement
-  # the HCP artifact interface required for the hcp_packer_registry
-  # block. Attempting to use it produces:
+  # the hcp_packer_registry block interface — using it produces:
   #   "No HCP Packer-compatible artifacts were found for the build"
   #
-  # HCP registration is handled manually by the lab instructor via
-  # the HCP Packer portal UI using the image ID from packer-manifest.json.
-  # Students view the registered image via demo-hcp-packer.sh.
+  # Registration is handled by the shell-local post-processor below,
+  # which runs on the local machine after image capture and calls the
+  # HCP REST API directly using HCP_CLIENT_ID / HCP_CLIENT_SECRET.
+  # If those env vars are not set, the step is skipped gracefully —
+  # the build itself never fails due to HCP registration.
   # ── ─────────────────────────────────────────────────────────
 
   # Include eu-de source only when build_eu_de = true
@@ -212,9 +209,27 @@ build {
     ]
   }
 
-  # ── Post-processor: local manifest ──────────────────────────
+  # ── Post-processors: manifest then HCP registration ─────────
+  # The sequence block guarantees manifest is written first, then
+  # shell-local reads it to register the build in HCP Packer.
   post-processor "manifest" {
     output     = "${path.root}/packer-manifest.json"
     strip_path = true
+  }
+
+  # Runs on your local machine after image capture — no VSI needed.
+  # Reads artifact_id + packer_run_uuid from packer-manifest.json.
+  # Requires HCP_CLIENT_ID and HCP_CLIENT_SECRET in the environment.
+  # Set them before the build:
+  #   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
+  #   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
+  post-processor "shell-local" {
+    environment_vars = [
+      "HCP_CLIENT_ID=${env("HCP_CLIENT_ID")}",
+      "HCP_CLIENT_SECRET=${env("HCP_CLIENT_SECRET")}",
+      "PACKER_TEMPLATE_DIR=${path.root}",
+    ]
+    execute_command = ["sh", "-c", "{{.Vars}} sh '{{.Script}}'"]
+    script          = "${path.root}/scripts/hcp-register-build.sh"
   }
 }

@@ -4,10 +4,11 @@
 # All Packer input variable declarations for LAB-3931.
 # Values are supplied via student.pkrvars.hcl (gitignored).
 #
-# The IBM Cloud API key is the only secret needed for the build.
-# It is read from Vault at build time and exported as IBM_API_KEY:
+# Export all three credentials from Vault before running packer build:
 #
 #   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
+#   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
+#   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
 #   packer build -var-file=student.pkrvars.hcl .
 # ---------------------------------------------------------------
 

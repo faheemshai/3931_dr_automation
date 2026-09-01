@@ -31,10 +31,12 @@ packer/
 ```bash
 # 1. Copy and fill in your var file
 cp student.pkrvars.hcl.example student.pkrvars.hcl
-# Edit student.pkrvars.hcl — set student_id (ibm_api_key pre-filled for lab)
+# Edit student.pkrvars.hcl — set student_id
 
-# 2. Export the IBM API key from Vault
+# 2. Export all credentials from Vault
 export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
+export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
+export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
 
 # 3. Initialise plugins (first time only)
 cd packer/
@@ -43,13 +45,14 @@ packer init .
 # 4. Validate the template
 packer validate -var-file=student.pkrvars.hcl .
 
-# 5. Build
+# 5. Build — image is captured AND registered in HCP Packer automatically
 packer build -var-file=student.pkrvars.hcl .
 ```
 
-After a successful build, the golden image appears in:
-- **IBM Cloud console** → VPC Infrastructure → Custom Images
+After a successful build:
+- **IBM Cloud console** → VPC Infrastructure → Custom Images — image appears here
 - **`packer-manifest.json`** — full build record with image ID, timestamp, run UUID
+- **HCP Packer portal** → `rhel92-golden` bucket → new version registered automatically
 
 ---
 
@@ -85,13 +88,18 @@ tools such as Grype, Trivy, and Snyk.
 
 ## HCP Packer registry
 
-The IBM Cloud Packer plugin (v3.7.0) does not implement the HCP artifact
-interface, so the `hcp_packer_registry` build block cannot be used. Instead:
+The IBM Cloud Packer plugin (v3.7.0) does not implement the built-in
+`hcp_packer_registry` block. Registration is handled instead by a
+`post-processor "shell-local"` that runs **on your laptop** immediately
+after image capture, calling the HCP REST API directly via
+`scripts/hcp-register-build.sh`.
 
-1. The build writes `packer-manifest.json` with the IBM Cloud image ID
-2. The **lab instructor** registers the build in the HCP Packer portal UI
-   using the image ID and fingerprint from `packer-manifest.json`
-3. Students interact with the registered version via `demo-hcp-packer.sh`
+**How it works:**
+1. `manifest` post-processor writes `packer-manifest.json` with the image ID
+2. `shell-local` post-processor runs `hcp-register-build.sh` with the HCP creds
+3. The script creates version → build → artifact → marks DONE in HCP
+4. If `HCP_CLIENT_ID` / `HCP_CLIENT_SECRET` are not exported, the step is
+   skipped gracefully — the build itself never fails
 
 **Portal URL:**
 ```
@@ -118,7 +126,15 @@ golden_image_name_us_south = "rhel92-golden-<timestamp>-us-south"
 
 ---
 
-## Demo script
+## Scripts
+
+| Script | When it runs | What it does |
+|---|---|---|
+| `scripts/harden-rhel92.sh` | Inside build VSI | 8-step CIS RHEL 9 hardening |
+| `scripts/hcp-register-build.sh` | Post-processor (local) | Registers build in HCP Packer via REST API |
+| `scripts/demo-hcp-packer.sh` | Manually on stage | TechXchange live demo — 8 sections |
+
+### Demo script
 
 Run the full TechXchange showcase from anywhere in the repo:
 
