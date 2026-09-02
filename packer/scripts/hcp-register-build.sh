@@ -3,23 +3,30 @@
 # packer/scripts/hcp-register-build.sh
 #
 # Called automatically by Packer's post-processor "shell-local"
-# immediately after the image is captured.
+# after EACH region's image is captured (once per source block).
 #
-# Packer passes context via environment variables:
-#   PACKER_BUILD_NAME   — e.g. "rhel92_us_south"
-#   PACKER_RUN_UUID     — unique ID for this build run
-#   HCP_CLIENT_ID       — set before packer build (from Vault)
-#   HCP_CLIENT_SECRET   — set before packer build (from Vault)
+# With build_eu_de = true, Packer runs this script twice:
+#   Run 1 — after us-south image is captured
+#   Run 2 — after eu-de   image is captured
 #
-# The image ID and image name are read from packer-manifest.json
-# which the "manifest" post-processor writes just before this runs.
+# Both runs share the SAME FINGERPRINT (set once at the start
+# of the Packer build via PACKER_BUILD_FINGERPRINT) so both
+# artifacts end up in the same HCP Packer version, which means:
+#   - HCP registry shows one version with TWO regional artifacts
+#   - Terraform can look up either artifact by region
+#   - Image governance is tied to a single version fingerprint
 #
-# Usage (called by Packer, not directly):
-#   Post-processor "shell-local" in rhel92-ibmcloud.pkr.hcl
+# Environment variables injected by Packer post-processor:
+#   PACKER_BUILD_NAME      — e.g. "rhel92_us_south" or "rhel92_eu_de"
+#   PACKER_RUN_UUID        — unique ID for this build run
+#   HCP_CLIENT_ID          — set before packer build (from Vault)
+#   HCP_CLIENT_SECRET      — set before packer build (from Vault)
+#   PACKER_TEMPLATE_DIR    — path to packer/ directory
+#   PACKER_BUILD_FINGERPRINT — shared across both region runs
+#
+# The image ID is read from packer-manifest.json which the
+# "manifest" post-processor writes just before this runs.
 # ---------------------------------------------------------------
-
-# Do NOT use set -e — curl failures must be handled explicitly so the
-# post-processor always exits 0 (image is already built; HCP is optional).
 
 BOLD="\033[1m"
 CYAN="\033[1;36m"
@@ -37,33 +44,47 @@ ORG="d964990b-39d2-42d2-b37b-bb8ce075c701"
 PROJ="48e86032-f0da-45af-a68d-67c67d1f383b"
 BUCKET="rhel92-golden"
 
-# Packer sets this to the directory containing the template
 PACKER_DIR="${PACKER_TEMPLATE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 MANIFEST="${PACKER_DIR}/packer-manifest.json"
 
 printf "\n${CYAN}════════════════════════════════════════════════════${RESET}\n"
-printf "${BOLD}  HCP Packer — registering build${RESET}\n"
+printf "${BOLD}  HCP Packer — registering build: ${PACKER_BUILD_NAME:-unknown}${RESET}\n"
 printf "${CYAN}════════════════════════════════════════════════════${RESET}\n\n"
 
 # ── Validate required env vars ────────────────────────────────
 if [ -z "${HCP_CLIENT_ID}" ] || [ -z "${HCP_CLIENT_SECRET}" ]; then
   warn "HCP_CLIENT_ID or HCP_CLIENT_SECRET not set — skipping HCP registration"
-  printf "\n  To register on the next build, export before running packer:\n"
-  printf "    ${CYAN}export HCP_CLIENT_ID=\$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)${RESET}\n"
-  printf "    ${CYAN}export HCP_CLIENT_SECRET=\$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)${RESET}\n\n"
-  exit 0   # exit 0 — don't fail the build over optional HCP step
+  printf "\n  To register on the next build, run:\n"
+  printf "    ${CYAN}source student-tokens/student-sNN.env${RESET}\n"
+  printf "    ${CYAN}bash scripts/student-setup-env.sh${RESET}\n\n"
+  exit 0
 fi
 
-# ── Read artifact from manifest ───────────────────────────────
+# ── Read this build's artifact from manifest ──────────────────
+# The manifest post-processor appends each build as it completes.
+# We find the entry that matches the current PACKER_BUILD_NAME.
 if [ ! -f "${MANIFEST}" ]; then
   warn "packer-manifest.json not found at ${MANIFEST} — skipping"
   exit 0
 fi
 
-ARTIFACT_ID=$(jq -r '.builds[-1].artifact_id'     "${MANIFEST}" 2>/dev/null)
-RUN_UUID=$(jq -r    '.builds[-1].packer_run_uuid'  "${MANIFEST}" 2>/dev/null)
-BUILD_TIME=$(jq -r  '.builds[-1].build_time'       "${MANIFEST}" 2>/dev/null)
-BUILD_NAME=$(jq -r  '.builds[-1].name'             "${MANIFEST}" 2>/dev/null)
+# Extract the entry for THIS build name specifically.
+# jq outputs a JSON object — pipe through jq -s '.[0]' to safely
+# collect multi-line output into a single string before using it.
+BUILD_ENTRY=$(jq -c \
+  --arg name "${PACKER_BUILD_NAME}" \
+  '.builds[] | select(.name == $name)' \
+  "${MANIFEST}" 2>/dev/null | head -1)
+
+if [ -z "${BUILD_ENTRY}" ]; then
+  # Fall back to latest entry if name match fails (e.g. PACKER_BUILD_NAME not set)
+  BUILD_ENTRY=$(jq -c '.builds[-1]' "${MANIFEST}" 2>/dev/null)
+fi
+
+ARTIFACT_ID=$(printf '%s' "${BUILD_ENTRY}" | jq -r '.artifact_id'    2>/dev/null)
+RUN_UUID=$(printf '%s' "${BUILD_ENTRY}"    | jq -r '.packer_run_uuid' 2>/dev/null)
+BUILD_TIME=$(printf '%s' "${BUILD_ENTRY}"  | jq -r '.build_time'      2>/dev/null)
+BUILD_NAME=$(printf '%s' "${BUILD_ENTRY}"  | jq -r '.name'            2>/dev/null)
 
 # Derive region from build name suffix
 case "${BUILD_NAME}" in
@@ -76,21 +97,29 @@ BUILD_DATE=$(date -r "${BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
              date -d "@${BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
              date "+%Y-%m-%d")
 
-# To prevent fingerprint collision and duplicate version errors, we generate a 100%
-# unique, timestamp-based fingerprint. HCP Packer limits fingerprints to 40 characters.
-FINGERPRINT="fp-$(date "+%Y%m%d%H%M%S")"
+# ── Fingerprint strategy ──────────────────────────────────────
+# Use PACKER_BUILD_FINGERPRINT if set (shared across both region runs
+# by the calling environment). This ensures us-south and eu-de artifacts
+# land in the SAME HCP Packer version.
+# If not set, fall back to a timestamp-based fingerprint.
+if [ -n "${PACKER_BUILD_FINGERPRINT:-}" ]; then
+  FINGERPRINT="${PACKER_BUILD_FINGERPRINT}"
+  info "Using shared fingerprint (dual-region): ${FINGERPRINT}"
+else
+  FINGERPRINT="fp-$(date "+%Y%m%d%H%M%S")"
+  info "Using per-run fingerprint (single-region): ${FINGERPRINT}"
+fi
 
-printf "  %-20s %s\n" "Artifact ID:"  "${ARTIFACT_ID}"
-printf "  %-20s %s\n" "Run UUID:"     "${RUN_UUID}"
-printf "  %-20s %s\n" "Fingerprint:"  "${FINGERPRINT}"
-printf "  %-20s %s\n" "Build name:"   "${BUILD_NAME}"
-printf "  %-20s %s\n" "Region:"       "${REGION}"
-printf "  %-20s %s\n" "Build date:"   "${BUILD_DATE}"
+printf "  %-22s %s\n" "Artifact ID:"    "${ARTIFACT_ID}"
+printf "  %-22s %s\n" "Run UUID:"       "${RUN_UUID}"
+printf "  %-22s %s\n" "Fingerprint:"    "${FINGERPRINT}"
+printf "  %-22s %s\n" "Build name:"     "${BUILD_NAME}"
+printf "  %-22s %s\n" "Region:"         "${REGION}"
+printf "  %-22s %s\n" "Build date:"     "${BUILD_DATE}"
 printf "\n"
 
 # ── Get HCP token ─────────────────────────────────────────────
 info "Authenticating to HCP..."
-# -s = silent, no -f so HTTP errors don't cause non-zero exit, --retry 3
 TOKEN_RESP=$(curl -s --retry 3 --retry-delay 2 --max-time 30 \
   --request POST \
   --url "https://auth.idp.hashicorp.com/oauth2/token" \
@@ -108,8 +137,6 @@ if [ -z "${HCP_TOKEN}" ]; then
 fi
 ok "HCP token obtained"
 
-# Helper for all subsequent HCP API calls
-# -s silent, no -f, --retry 3 so transient network blips are retried
 _hcp() {
   curl -s --retry 3 --retry-delay 2 --max-time 30 \
     -H "Authorization: Bearer ${HCP_TOKEN}" \
@@ -117,53 +144,70 @@ _hcp() {
 }
 
 # ── Step 1: Verify bucket exists ─────────────────────────────
+# NOTE: The HCP Packer REST API does NOT expose a bucket-creation
+# endpoint (POST /buckets returns Method Not Allowed).
+# The bucket must be created ONCE via the HCP portal or Terraform
+# hcp_packer_bucket resource before running packer build.
+#
+# One-time setup (instructor only):
+#   Portal → https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer
+#   Click "Create Bucket" → name: rhel92-golden
+#
+#   OR via Terraform (hcp_packer_bucket resource):
+#     resource "hcp_packer_bucket" "lab3931" {
+#       name       = "rhel92-golden"
+#       project_id = "${PROJ}"
+#     }
 info "Checking bucket '${BUCKET}'..."
 BUCKET_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
-# The API may return slug, name, or id depending on version — check for any
-BUCKET_OK=$(printf '%s' "${BUCKET_RESP}" | jq -r '
-  .bucket.slug // .bucket.name // .bucket.id // empty' 2>/dev/null)
-# Also accept response if it has no "code" error field (i.e. not a 404)
+BUCKET_OK=$(printf '%s' "${BUCKET_RESP}" | jq -r '.bucket.slug // .bucket.name // .bucket.id // empty' 2>/dev/null)
 HAS_ERROR=$(printf '%s' "${BUCKET_RESP}" | jq -r '.code // empty' 2>/dev/null)
+
 if [ -z "${BUCKET_OK}" ] && [ -n "${HAS_ERROR}" ]; then
-  warn "Bucket '${BUCKET}' not found — run: packer build hcp-bucket-init.pkr.hcl"
-  printf "  API response: %.200s\n" "${BUCKET_RESP}"
+  warn "Bucket '${BUCKET}' does not exist in HCP Packer."
+  printf "\n  Create it once via the HCP portal:\n"
+  printf "    https://portal.cloud.hashicorp.com/orgs/%s/projects/%s/packer\n\n" "${ORG}" "${PROJ}"
+  printf "  Then re-run registration manually:\n"
+  printf "    PACKER_TEMPLATE_DIR=%s PACKER_BUILD_NAME=rhel92_us_south \\\\\n" "${PACKER_DIR}"
+  printf "    PACKER_BUILD_FINGERPRINT=fp-manual sh %s/scripts/hcp-register-build.sh\n\n" "${PACKER_DIR}"
+  printf "  IBM Cloud images are already built and available:\n"
+  printf "    us-south: check packer-manifest.json → rhel92_us_south artifact_id\n"
+  printf "    eu-de:    check packer-manifest.json → rhel92_eu_de artifact_id\n\n"
+  # Exit 0 — images are captured; don't fail the overall build
   exit 0
 fi
 ok "Bucket reachable: ${BUCKET}"
 
-# ── Step 2: Create version (delete stale one first if exists) ────
-# A previous failed run may have left an incomplete version with this
-# fingerprint. HCP won't accept builds against it. Delete and recreate.
-info "Checking for stale version (fingerprint=${FINGERPRINT})..."
+# ── Step 2: Create or reuse version ──────────────────────────
+# When building both regions, the second script run (eu-de) will
+# find the version already created by the first run (us-south)
+# and reuse it. Both artifacts land in the same version.
+info "Checking for existing version (fingerprint=${FINGERPRINT})..."
 VERSIONS_RESP=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" 2>/dev/null)
-STALE_ID=$(printf '%s' "${VERSIONS_RESP}" | jq -r \
+EXISTING_VERSION_ID=$(printf '%s' "${VERSIONS_RESP}" | jq -r \
   ".versions[]? | select(.fingerprint==\"${FINGERPRINT}\") | .id" 2>/dev/null | head -1)
 
-if [ -n "${STALE_ID}" ]; then
-  info "Deleting stale version ${STALE_ID}..."
-  _hcp --request DELETE \
-    "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${STALE_ID}" \
-    > /dev/null 2>&1
-  ok "Stale version deleted"
-  sleep 2
+if [ -n "${EXISTING_VERSION_ID}" ]; then
+  # Version already exists from the first region's run — reuse it
+  VERSION_ID="${EXISTING_VERSION_ID}"
+  ok "Reusing existing version: ${VERSION_ID} (second region artifact will be added)"
+else
+  # First region to complete — create the version
+  info "Creating new version (fingerprint=${FINGERPRINT})..."
+  VER_RESP=$(_hcp --request POST \
+    "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
+    --data "{\"fingerprint\":\"${FINGERPRINT}\",\"template_type\":\"HCL2\"}" 2>/dev/null)
+  VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
+  if [ -z "${VERSION_ID}" ]; then
+    warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
+    exit 0
+  fi
+  ok "Version created: ${VERSION_ID}"
+  sleep 5
 fi
 
-info "Creating version (fingerprint=${FINGERPRINT})..."
-VER_RESP=$(_hcp --request POST \
-  "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
-  --data "{\"fingerprint\":\"${FINGERPRINT}\",\"template_type\":\"HCL2\"}" 2>/dev/null)
-VERSION_ID=$(printf '%s' "${VER_RESP}" | jq -r '.version.id // empty' 2>/dev/null)
-if [ -z "${VERSION_ID}" ]; then
-  warn "Version create failed: $(printf '%s' "${VER_RESP}" | head -c 300)"
-  exit 0
-fi
-ok "Version created: ${VERSION_ID}"
-# Give HCP a moment to fully commit the version before posting builds to it
-sleep 5
-
-# ── Step 3: Create build record with hardening labels ─────────
-# ── Step 3: Create build record with dynamic artifacts ─────────
-info "Creating build record with registered artifacts..."
+# ── Step 3: Add this region's build record to the version ─────
+info "Registering ${REGION} artifact in version ${VERSION_ID}..."
 BUILD_PAYLOAD=$(jq -n \
   --arg comp   "${BUILD_NAME}" \
   --arg uuid   "${RUN_UUID}" \
@@ -177,7 +221,7 @@ BUILD_PAYLOAD=$(jq -n \
     platform:        "ibmcloud",
     labels: {
       "build-date":        $date,
-      "primary-region":    $region,
+      "region":            $region,
       "hardening-step-1":  "system-packages-updated",
       "hardening-step-2":  "nginx-jq-openssl-curl-installed",
       "hardening-step-3":  "unnecessary-services-disabled",
@@ -206,18 +250,21 @@ if [ -z "${BUILD_ID}" ]; then
   warn "Build record failed: $(printf '%s' "${BUILD_RESP}" | head -c 300)"
   exit 0
 fi
-ok "Build record created: ${BUILD_ID} (with artifact: ${ARTIFACT_ID})"
+ok "Build record created: ${BUILD_ID} (artifact: ${ARTIFACT_ID}, region: ${REGION})"
 
 # ── Step 4: Complete version ──────────────────────────────────
-info "Completing version..."
+# Called by both runs — idempotent, safe to call twice.
+info "Marking version complete..."
 _hcp --request PATCH \
   "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions/${FINGERPRINT}" \
   --data '{}' > /dev/null 2>&1
-ok "Version complete"
+ok "Version marked complete"
 
-printf "\n${GREEN}${BOLD}  HCP Packer registration complete!${RESET}\n"
-printf "\n  %-20s %s\n" "Bucket:" "${BUCKET}"
-printf "  %-20s %s\n" "Version ID:" "${VERSION_ID}"
-printf "  %-20s %s\n" "Artifact:" "${ARTIFACT_ID}"
-printf "  %-20s https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}\n" "Portal:"
+printf "\n${GREEN}${BOLD}  HCP Packer registration complete — ${REGION}!${RESET}\n"
+printf "\n  %-22s %s\n" "Bucket:"      "${BUCKET}"
+printf "  %-22s %s\n"   "Fingerprint:" "${FINGERPRINT}"
+printf "  %-22s %s\n"   "Version ID:"  "${VERSION_ID}"
+printf "  %-22s %s\n"   "Region:"      "${REGION}"
+printf "  %-22s %s\n"   "Artifact ID:" "${ARTIFACT_ID}"
+printf "  %-22s https://portal.cloud.hashicorp.com/orgs/${ORG}/projects/${PROJ}/packer/buckets/${BUCKET}\n" "Portal:"
 printf "\n"

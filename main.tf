@@ -58,9 +58,15 @@ module "networking_primary" {
   ibm_region           = var.ibm_region_primary
   ibm_zone             = var.ibm_zone_primary
   subnet_address_count = var.subnet_address_count
+
+  # ID-based lookup — us-south dedicated lab account
+  existing_vpc_id    = var.existing_vpc_id_primary       # r006-76dee245-0417-4682-951e-2b1d149a7639
+  existing_subnet_id = var.existing_subnet_id_primary    # 0717-c20d5d2d-6216-4b99-88d7-8b441ef20a9e
+  # Name-based fallback (only used when ID vars above are empty)
   existing_vpc_name    = var.existing_vpc_name_primary
   existing_subnet_name = var.existing_subnet_name_primary
-  ssh_public_key       = file("${path.root}/../ent_demo_ed25519.pub")
+
+  ssh_public_key = file("${path.root}/../ent_demo_ed25519.pub")
 }
 
 module "security_groups_primary" {
@@ -96,12 +102,13 @@ module "vsi_primary" {
     ibm = ibm.primary
   }
 
-  project      = var.project
-  environment  = var.environment
-  ibm_region   = var.ibm_region_primary
-  ibm_zone     = var.ibm_zone_primary
-  vsi_count    = var.vsi_count
-  vsi_profile  = var.vsi_profile
+  project               = var.project
+  environment           = var.environment
+  ibm_resource_group_id = var.ibm_resource_group_id   # 90733208e12b46eda9c4fbc130b8e426
+  ibm_region            = var.ibm_region_primary
+  ibm_zone              = var.ibm_zone_primary
+  vsi_count             = var.vsi_count
+  vsi_profile           = var.vsi_profile
 
   # Golden image from Packer — resolved dynamically
   image_id     = local.image_id_primary
@@ -136,9 +143,15 @@ module "networking_dr" {
   ibm_region           = var.ibm_region_dr
   ibm_zone             = var.ibm_zone_dr
   subnet_address_count = var.subnet_address_count
+
+  # ID-based lookup — eu-de dedicated lab account
+  existing_vpc_id    = var.existing_vpc_id_dr       # r010-75fc4ba7-8a56-4a42-baaa-b6691a7f24ac
+  existing_subnet_id = var.existing_subnet_id_dr    # 02b7-df5e6a98-fa9c-4e87-b67c-057d360b62ba
+  # Name-based fallback (only used when ID vars above are empty)
   existing_vpc_name    = var.existing_vpc_name_dr
   existing_subnet_name = var.existing_subnet_name_dr
-  ssh_public_key       = file("${path.root}/../ent_demo_ed25519.pub")
+
+  ssh_public_key = file("${path.root}/../ent_demo_ed25519.pub")
 }
 
 module "security_groups_dr" {
@@ -177,12 +190,13 @@ module "vsi_dr" {
     ibm = ibm.dr
   }
 
-  project      = var.project
-  environment  = "${var.environment}-dr"
-  ibm_region   = var.ibm_region_dr
-  ibm_zone     = var.ibm_zone_dr
-  vsi_count    = var.vsi_count
-  vsi_profile  = var.vsi_profile
+  project               = var.project
+  environment           = "${var.environment}-dr"
+  ibm_resource_group_id = var.ibm_resource_group_id   # 90733208e12b46eda9c4fbc130b8e426
+  ibm_region            = var.ibm_region_dr
+  ibm_zone              = var.ibm_zone_dr
+  vsi_count             = var.vsi_count
+  vsi_profile           = var.vsi_profile
 
   image_id     = local.image_id_dr
 

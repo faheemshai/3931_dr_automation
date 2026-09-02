@@ -31,14 +31,57 @@ log "OS: $(cat /etc/redhat-release)"
 # ═══════════════════════════════════════════════════════════════
 log "--- Step 1: System update ---"
 
-# Disable any EUS repos that are unavailable on this IBM Cloud image
-# (they return 404 and cause dnf to abort entirely)
+# ── Physically disable EUS/E4S repos BEFORE any dnf call ─────
+# IBM Cloud RHEL minimal images ship with EUS repo definitions that
+# return HTTP 404 in some regions (e.g. eu-de). dnf downloads repo
+# metadata BEFORE config-manager --disable takes effect, so we must
+# edit the .repo files directly to prevent the 404 from aborting the
+# entire dnf run.
+log "  Disabling EUS/E4S repo files to prevent 404 metadata errors..."
+for repo_file in /etc/yum.repos.d/*.repo; do
+  [ -f "${repo_file}" ] || continue
+  # Set enabled=0 for any section whose name contains eus, e4s, or aus
+  python3 - "${repo_file}" <<'PYEOF' 2>/dev/null || true
+import sys, re
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+# Match [section-name] headers containing eus/e4s/aus (case-insensitive)
+# and set their enabled= line to 0, or add enabled=0 if missing
+result = []
+in_target = False
+for line in content.splitlines():
+    if re.match(r'^\[.*(?:eus|e4s|aus).*\]', line, re.IGNORECASE):
+        in_target = True
+        result.append(line)
+    elif re.match(r'^\[', line):
+        in_target = False
+        result.append(line)
+    elif in_target and re.match(r'^enabled\s*=', line, re.IGNORECASE):
+        result.append('enabled=0')
+    else:
+        result.append(line)
+with open(path, 'w') as f:
+    f.write('\n'.join(result) + '\n')
+PYEOF
+done
+
+# Belt-and-suspenders: also run config-manager disable
 dnf config-manager --disable "*eus*" 2>/dev/null || true
 dnf config-manager --disable "*e4s*" 2>/dev/null || true
+dnf config-manager --disable "*aus*" 2>/dev/null || true
+
+# Clean cached metadata so dnf re-reads the updated repo state
+dnf clean metadata 2>/dev/null || true
+
+log "  EUS/E4S/AUS repos disabled."
 
 # Update using only the repos that are actually reachable
-dnf update -y --nobest --skip-broken || dnf update -y --skip-broken || true
-log "System update complete (non-fatal errors suppressed)."
+dnf update -y --disablerepo="*eus*" --disablerepo="*e4s*" --disablerepo="*aus*" \
+    --nobest --skip-broken || \
+  dnf update -y --disablerepo="*eus*" --disablerepo="*e4s*" --disablerepo="*aus*" \
+    --skip-broken || true
+log "System update complete."
 
 # ═══════════════════════════════════════════════════════════════
 # 2. Install required runtime packages
@@ -47,24 +90,27 @@ log "--- Step 2: Installing packages ---"
 
 # Enable CRB (CodeReady Linux Builder) for additional packages — best effort
 dnf config-manager --set-enabled crb 2>/dev/null || true
-# Re-disable EUS in case enabling crb re-enabled them
+# Re-disable EUS/E4S/AUS in case enabling crb re-enabled them
 dnf config-manager --disable "*eus*" 2>/dev/null || true
+dnf config-manager --disable "*e4s*" 2>/dev/null || true
+dnf config-manager --disable "*aus*" 2>/dev/null || true
 
-dnf install -y \
-  nginx \
-  jq \
-  curl \
-  openssl \
-  ca-certificates \
-  net-tools \
-  bind-utils \
-  unzip \
-  policycoreutils-python-utils \
-  setools-console \
-  audit \
-  firewalld \
-  chrony \
-  rsyslog
+# Install in two passes: core packages first (must succeed), then
+# optional packages best-effort so a missing package in one region
+# doesn't abort the entire build.
+CORE_PKGS="nginx jq curl openssl ca-certificates firewalld chrony rsyslog audit"
+OPT_PKGS="net-tools bind-utils unzip policycoreutils-python-utils setools-console"
+
+DNF_DISABLE="--disablerepo=*eus* --disablerepo=*e4s* --disablerepo=*aus*"
+
+# shellcheck disable=SC2086
+dnf install -y ${DNF_DISABLE} ${CORE_PKGS}
+log "Core packages installed."
+
+# Optional packages — skip-broken so a 404 on one repo doesn't abort
+# shellcheck disable=SC2086
+dnf install -y ${DNF_DISABLE} --skip-broken --nobest ${OPT_PKGS} || \
+  log "  Some optional packages skipped (not critical)."
 
 log "Packages installed."
 

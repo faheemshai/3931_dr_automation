@@ -1,62 +1,55 @@
 # ---------------------------------------------------------------
 # packer/student.pkrvars.hcl.example
 #
-# LAB-3931 — Student variable file template
+# Copy this file to student.pkrvars.hcl (gitignored) and fill in
+# your values before running packer build.
 #
-# STEP 1 — Copy this file:
-#   cp student.pkrvars.hcl.example student.pkrvars.hcl
+# Dedicated lab account IDs (already filled in below):
+#   Resource group : 90733208e12b46eda9c4fbc130b8e426
+#   us-south subnet: 0717-c20d5d2d-6216-4b99-88d7-8b441ef20a9e
+#   eu-de subnet   : 02b7-df5e6a98-fa9c-4e87-b67c-057d360b62ba
 #
-# STEP 2 — Edit student.pkrvars.hcl — set your student_id
-#           Leave ibm_api_key = "" (it is exported from Vault below)
-#
-# STEP 3 — Export all credentials from Vault:
+# Credentials — set via environment variables before running packer:
 #   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
 #   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
 #   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
 #
-# STEP 4 — Run the build:
-#   cd packer/
+# Build command:
 #   packer init .
 #   packer validate -var-file=student.pkrvars.hcl .
 #   packer build   -var-file=student.pkrvars.hcl .
-#
-# ── Security rules ───────────────────────────────────────────────
-#   student.pkrvars.hcl  is gitignored — NEVER commit it.
-#   If you accidentally commit it, Vault Radar will block the push.
 # ---------------------------------------------------------------
 
-# ── Your student ID ──────────────────────────────────────────────
-# Stamped into /etc/os-release on the golden image.
-student_id = "student-XX"    # ← replace XX with your assigned number
+# ── IBM API key ───────────────────────────────────────────────────
+# Sourced from Vault at setup time by student-setup-env.sh.
+# Never hardcode a real key here — the setup script writes it for you.
+# ibm_api_key = "PASTE_KEY_HERE_ONLY_IF_RUNNING_WITHOUT_SETUP_SCRIPT"
 
-# ── IBM Cloud API key ────────────────────────────────────────────
-# Do NOT set ibm_api_key here. The variable default in variables.pkr.hcl
-# reads env("IBM_API_KEY"), so export it in your shell before running
-# packer validate or packer build:
-#   export IBM_API_KEY=$(vault kv get -namespace=admin -mount=kv -field=ibm_api_key IBM_cloud)
+# ── Student identity (stamped into /etc/os-release on the image) ──
+student_id = "student-01"   # change to your assigned student number
 
-# ── IBM Cloud resource group ID ──────────────────────────────────
-# Get it with: ibmcloud resource group <name> --id
-ibm_resource_group_id = "b93f575887be43e894e861eb336485d3"
+# ── IBM Cloud resource group ──────────────────────────────────────
+# Dedicated lab account — images are stored in this resource group
+ibm_resource_group_id = "90733208e12b46eda9c4fbc130b8e426"
 
-# ── Base RHEL 9 image ────────────────────────────────────────────
-# Use a NON-minimal image for reliable SSH key injection.
-# Check available images: ibmcloud is images --visibility public | grep rhel-9
-base_image_name = "ibm-redhat-9-4-amd64-5"
+# ── us-south build subnet ─────────────────────────────────────────
+# The temporary Packer build VSI is launched in this subnet.
+# Subnet must have a public gateway attached for dnf internet access.
+subnet_id_us_south = "0717-c20d5d2d-6216-4b99-88d7-8b441ef20a9e"
+
+# ── eu-de build subnet ────────────────────────────────────────────
+# DR region subnet — already filled in with the dedicated lab account value.
+subnet_id_eu_de = "02b7-df5e6a98-fa9c-4e87-b67c-057d360b62ba"
+
+# ── Build region control ──────────────────────────────────────────
+# true  = build BOTH us-south (primary) AND eu-de (DR) in parallel
+# false = us-south only (faster, use for quick single-region tests)
+build_eu_de = true
+
+# ── Base image ────────────────────────────────────────────────────
+# IBM Cloud stock RHEL 9.4 image — Packer uses this as the build base.
+base_image_name = "ibm-redhat-9-8-minimal-amd64-2"
 
 # ── Image name prefix ────────────────────────────────────────────
-# Timestamp is appended automatically: rhel92-golden-20260901050120-us-south
+# Compact timestamp is appended automatically: rhel92-golden-YYYYMMDDHHMMSS
 image_name_prefix = "rhel92-golden"
-
-# ── Build region control ─────────────────────────────────────────
-# false = us-south only (use for Task 1 testing)
-# true  = both us-south + eu-de in parallel (use for full lab)
-build_eu_de = false
-
-# ── Subnet IDs ───────────────────────────────────────────────────
-# Subnets must have a public gateway attached (needed for dnf updates).
-# Instructor pre-creates these. Get IDs with:
-#   ibmcloud is subnets | grep us-south
-#   ibmcloud is subnets | grep eu-de
-subnet_id_us_south = "0717-9b0c29d6-a257-4156-ba7a-f8f28f854019"
-subnet_id_eu_de    = ""   # ← fill in when build_eu_de = true

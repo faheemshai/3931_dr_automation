@@ -1,13 +1,12 @@
 # ---------------------------------------------------------------
 # modules/vsi/main.tf
-# 2 × IBM Cloud Virtual Server Instances (fixed count, no ASG)
-# Image  : ibm-centos-stream-9-amd64-17
-# Profile: bxf-2x8 (Flex | 2 vCPU / 8 GB RAM)
-# Zone   : eu-de-2  (var.ibm_zone)
+# IBM Cloud Virtual Server Instances
+# Profile : cx2-2x4  (2 vCPU / 4 GB RAM)
+# Image   : Packer-built RHEL 9.2 golden image (resolved by ID)
+# Resource group: var.ibm_resource_group_id
+#                 = 90733208e12b46eda9c4fbc130b8e426 (dedicated lab account)
 #
-# SSH public key is injected from Vault Enterprise via the
-# vpc module (ibm_is_ssh_key.vault_key).
-#
+# SSH public key is injected from Vault via the vpc module.
 # Each VSI is registered as a pool member of the IBM Cloud LB.
 # ---------------------------------------------------------------
 
@@ -23,11 +22,12 @@ data "ibm_is_image" "golden" {
 
 # ── VSI instances ────────────────────────────────────────────────
 resource "ibm_is_instance" "app" {
-  count   = var.vsi_count
-  name    = "${local.name_prefix}-vsi-${count.index + 1}"
-  profile = var.vsi_profile
-  image   = data.ibm_is_image.golden.id
-  zone    = var.ibm_zone
+  count          = var.vsi_count
+  name           = "${local.name_prefix}-vsi-${count.index + 1}"
+  profile        = var.vsi_profile
+  image          = data.ibm_is_image.golden.id
+  zone           = var.ibm_zone
+  resource_group = var.ibm_resource_group_id
 
   vpc  = var.vpc_id
   keys = [var.ssh_key_id]

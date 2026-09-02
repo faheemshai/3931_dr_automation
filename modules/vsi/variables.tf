@@ -8,8 +8,14 @@ variable "project" {
 }
 
 variable "environment" {
-  description = "Deployment environment label (prod / staging / dev)"
+  description = "Deployment environment label (prod / staging / dev / sNN)"
   type        = string
+}
+
+variable "ibm_resource_group_id" {
+  description = "IBM Cloud resource group ID — VSIs are placed in this group"
+  type        = string
+  default     = "90733208e12b46eda9c4fbc130b8e426"
 }
 
 variable "ibm_region" {
@@ -29,7 +35,7 @@ variable "vsi_count" {
 }
 
 variable "vsi_profile" {
-  description = "IBM Cloud VSI profile (e.g. bxf-2x8 = Flex | 2 vCPU / 8 GB)"
+  description = "IBM Cloud VSI profile (e.g. cx2-2x4 = 2 vCPU / 4 GB)"
   type        = string
 }
 

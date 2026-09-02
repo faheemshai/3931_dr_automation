@@ -27,7 +27,7 @@ packer {
   required_plugins {
     ibmcloud = {
       source  = "github.com/IBM/ibmcloud"
-      version = ">= 3.0.0"
+      version = "= 3.7.0"
     }
   }
 }
@@ -39,27 +39,6 @@ locals {
 
   # Human-readable build date for HCP Packer portal labels
   build_date = formatdate("YYYY-MM-DD", timestamp())
-
-  # cloud-init user-data: fetch SSH keys from IBM Cloud metadata service
-  # and write them to authorized_keys immediately at first boot.
-  # This forces key injection before sshd starts — fixes the RHEL 9
-  # minimal image timing race where cloud-init finishes too late.
-  cloud_init_user_data = <<-USERDATA
-    #!/bin/bash
-    set -e
-    mkdir -p /home/vpcuser/.ssh
-    chmod 700 /home/vpcuser/.ssh
-    # Fetch all SSH keys registered to this VSI from the metadata service
-    KEYS=$(curl -sf -H "Metadata-Flavor: ibm" \
-      "http://169.254.169.254/metadata/v1/keys?version=2022-03-01" \
-      | python3 -c "import sys,json; [print(k['public_key']) for k in json.load(sys.stdin).get('keys',[])]" 2>/dev/null || true)
-    if [ -n "$KEYS" ]; then
-      echo "$KEYS" >> /home/vpcuser/.ssh/authorized_keys
-    fi
-    chmod 600 /home/vpcuser/.ssh/authorized_keys
-    chown -R vpcuser:vpcuser /home/vpcuser/.ssh
-    restorecon -r /home/vpcuser/.ssh 2>/dev/null || true
-  USERDATA
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -79,12 +58,6 @@ source "ibmcloud-vpc" "rhel92_us_south" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
-  ssh_key_type        = "rsa"
-
-  # Inject the Packer-generated public key via user-data cloud-init.
-  # This writes authorized_keys BEFORE sshd starts, bypassing the
-  # IBM Cloud metadata key-injection timing issue on RHEL 9 minimal.
-  vsi_user_data = local.cloud_init_user_data
 
   image_name = "${local.image_name}-us-south"
 
@@ -92,6 +65,9 @@ source "ibmcloud-vpc" "rhel92_us_south" {
   ssh_username = "vpcuser"
   ssh_port     = 22
   ssh_timeout  = "45m"
+  # Packer generates an ephemeral RSA keypair, registers it in VPC,
+  # injects it into the build VSI, SSHes in, then deletes it automatically.
+  # ent_demo_ed25519 is used by Terraform for student VSI access — not here.
 
   timeout = "60m"
 }
@@ -101,7 +77,7 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
   api_key = var.ibm_api_key
 
   region    = "eu-de"
-  subnet_id = var.subnet_id_eu_de != "" ? var.subnet_id_eu_de : var.subnet_id_us_south
+  subnet_id = var.subnet_id_eu_de
 
   resource_group_id = var.ibm_resource_group_id
   security_group_id = ""
@@ -109,8 +85,6 @@ source "ibmcloud-vpc" "rhel92_eu_de" {
   vsi_base_image_name = var.base_image_name
   vsi_profile         = "cx2-2x4"
   vsi_interface       = "public"
-  ssh_key_type        = "rsa"
-  vsi_user_data       = local.cloud_init_user_data
 
   image_name = "${local.image_name}-eu-de"
 
@@ -157,7 +131,7 @@ build {
 
   # ── Step 2: Run hardening ────────────────────────────────────
   provisioner "shell" {
-    execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
+    execute_command = "sudo bash '{{.Path}}'"
     inline = [
       "chmod +x /tmp/harden-rhel92.sh",
       "sudo /tmp/harden-rhel92.sh",
@@ -167,7 +141,7 @@ build {
 
   # ── Step 3: Stamp build metadata ────────────────────────────
   provisioner "shell" {
-    execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
+    execute_command = "sudo bash '{{.Path}}'"
     inline = [
       "sudo bash -c \"echo 'LAB_BUILD_IMAGE=${local.image_name}' >> /etc/os-release\"",
       "sudo bash -c \"echo 'LAB_BUILD_DATE=${local.timestamp}'   >> /etc/os-release\"",
@@ -175,29 +149,9 @@ build {
     ]
   }
 
-  # ── Step 4: Generate SBOM (Software Bill of Materials) ───────
-  # provisioner "hcp-sbom" with auto_generate=true:
-  #   - Packer uploads its own binary to the VSI (no extra tools needed)
-  #   - Runs `packer sbom-generate` (embedded Syft SDK) on the VSI
-  #   - Scans the entire filesystem (/) for installed packages
-  #   - Downloads the CycloneDX JSON SBOM to packer/sbom/ locally
-  #   - Uploads the SBOM to HCP Packer and attaches it to the version
-  #   - packer/sbom/ dir is tracked via .gitkeep; *.json is gitignored
-  #
-  # Runs AFTER hardening and metadata stamping so the SBOM reflects
-  # the exact final state of the image before capture.
-  # Packer cleans up the uploaded binary from the VSI after the scan.
-  #
-  # Ref: https://developer.hashicorp.com/packer/docs/provisioners/hcp-sbom
-  provisioner "hcp-sbom" {
-    auto_generate = true
-    destination   = "${path.root}/sbom/"
-    sbom_name     = "rhel92-golden-${local.timestamp}"
-  }
-
   # ── Step 5: Pre-capture cleanup ─────────────────────────────
   provisioner "shell" {
-    execute_command = "{{.Vars}} sudo -S bash '{{.Path}}'"
+    execute_command = "sudo bash '{{.Path}}'"
     inline = [
       "sudo rm -f /etc/ssh/ssh_host_*",
       "sudo dnf clean all",
@@ -222,15 +176,19 @@ build {
   #   export HCP_CLIENT_ID=$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)
   #   export HCP_CLIENT_SECRET=$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)
   post-processor "shell-local" {
-    # HCP_CLIENT_ID and HCP_CLIENT_SECRET are inherited from the shell
-    # environment where you ran `packer build` — no need to re-declare them.
-    # PACKER_TEMPLATE_DIR tells the script where packer-manifest.json lives.
+    # Environment variables passed to hcp-register-build.sh:
+    #   PACKER_TEMPLATE_DIR      — where packer-manifest.json lives
+    #   PACKER_BUILD_FINGERPRINT — SHARED fingerprint across both region runs
+    #                              so us-south and eu-de artifacts land in the
+    #                              SAME HCP Packer version (one version, two artifacts)
+    #   HCP_CLIENT_ID / HCP_CLIENT_SECRET — inherited from the shell automatically
     environment_vars = [
       "PACKER_TEMPLATE_DIR=${path.root}",
+      "PACKER_BUILD_FINGERPRINT=fp-${local.timestamp}",
     ]
-    execute_command    = ["sh", "-c", "{{.Vars}} sh '{{.Script}}'"]
-    script             = "${path.root}/scripts/hcp-register-build.sh"
+    execute_command  = ["sh", "-c", "{{.Vars}} sh '{{.Script}}'"]
+    script           = "${path.root}/scripts/hcp-register-build.sh"
     # Image is already captured — never fail the build over HCP registration
-    valid_exit_codes   = [0, 1, 2]
+    valid_exit_codes = [0, 1, 2]
   }
 }

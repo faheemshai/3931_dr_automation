@@ -14,7 +14,11 @@ output "subnet_id" {
 
 output "subnet_crn" {
   description = "CRN of the subnet"
-  value       = local.use_existing_subnet ? data.ibm_is_subnet.existing[0].crn : ibm_is_subnet.new[0].crn
+  value = (
+    local.use_subnet_by_id   ? data.ibm_is_subnet.by_id[0].crn   :
+    local.use_subnet_by_name ? data.ibm_is_subnet.by_name[0].crn :
+    ibm_is_subnet.new[0].crn
+  )
 }
 
 output "ssh_key_id" {

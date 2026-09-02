@@ -35,3 +35,21 @@ ent_demo_ed25519.pub
 packer/packer-manifest.json
 packer/sbom/*.json
 # packer/sbom/.gitkeep is intentionally tracked
+
+# ── Packer student vars (auto-generated, personalised per student) ─
+packer/student.pkrvars.hcl
+
+# ── Student Vault tokens (NEVER commit — contains live Vault tokens)
+student-tokens/
+
+# ── Packer ephemeral SSH key directories (created/deleted per build) ─
+# Packer generates temp RSA keypairs in packer/<timestamp>ssh_keys/
+packer/*ssh_keys/
+packer/ssh_keys/
+
+# ── Student Vault token files (NEVER commit — contains live tokens) ─
+scripts/student-tokens/
+
+# ── HCP token cache (local auth state) ───────────────────────────
+hcp_token.json
+hcp_versions.json
