@@ -1,42 +1,19 @@
 # ---------------------------------------------------------------
 # modules/security_groups/main.tf
-# IBM Cloud VPC Security Groups (IBM provider >= 1.65):
-#   lb-sg  : inbound port 80 from 0.0.0.0/0  (public-facing LB)
-#   vsi-sg : inbound app_port from lb-sg + SSH from bastion CIDR
 #
-# NOTE: The deprecated tcp{} nested block has been replaced with
-#   top-level  protocol + port_min + port_max  arguments.
+# Single VSI security group — no load balancer in this architecture.
+# Traffic reaches VSIs directly via Floating IPs.
+#
+# Inbound:
+#   port 22  — SSH from any IP (controlled by ssh_allowed_cidr)
+#   port 80  — HTTP from internet (0.0.0.0/0)
+#   port 443 — HTTPS from internet (0.0.0.0/0)
+# Outbound:
+#   all      — unrestricted (dnf, Vault, IBM API calls)
 # ---------------------------------------------------------------
 
 locals {
   name_prefix = "${var.project}-${var.environment}"
-}
-
-# ── Load Balancer Security Group ─────────────────────────────────
-resource "ibm_is_security_group" "lb" {
-  name           = "${local.name_prefix}-lb-sg"
-  vpc            = var.vpc_id
-  resource_group = var.ibm_resource_group_id
-
-  tags = ["project:${var.project}", "env:${var.environment}", "tier:lb"]
-}
-
-# Allow inbound HTTP (port 80) from internet
-resource "ibm_is_security_group_rule" "lb_inbound_http" {
-  group     = ibm_is_security_group.lb.id
-  direction = "inbound"
-  remote    = "0.0.0.0/0"
-  protocol  = "tcp"
-  port_min  = 80
-  port_max  = 80
-}
-
-# Allow all outbound from LB (to reach VSIs)
-# protocol is intentionally omitted — omitting it means allow all protocols
-resource "ibm_is_security_group_rule" "lb_outbound_all" {
-  group     = ibm_is_security_group.lb.id
-  direction = "outbound"
-  remote    = "0.0.0.0/0"
 }
 
 # ── VSI Security Group ────────────────────────────────────────────
@@ -45,20 +22,10 @@ resource "ibm_is_security_group" "vsi" {
   vpc            = var.vpc_id
   resource_group = var.ibm_resource_group_id
 
-  tags = ["project:${var.project}", "env:${var.environment}", "tier:app"]
+  tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform"]
 }
 
-# Allow inbound app traffic from the LB security group only
-resource "ibm_is_security_group_rule" "vsi_inbound_app" {
-  group     = ibm_is_security_group.vsi.id
-  direction = "inbound"
-  remote    = ibm_is_security_group.lb.id
-  protocol  = "tcp"
-  port_min  = var.app_port
-  port_max  = var.app_port
-}
-
-# Allow inbound SSH from bastion / VPN CIDR
+# Allow inbound SSH
 resource "ibm_is_security_group_rule" "vsi_inbound_ssh" {
   group     = ibm_is_security_group.vsi.id
   direction = "inbound"
@@ -68,8 +35,27 @@ resource "ibm_is_security_group_rule" "vsi_inbound_ssh" {
   port_max  = 22
 }
 
-# Allow all outbound from VSI (dnf updates, Vault calls, etc.)
-# protocol is intentionally omitted — omitting it means allow all protocols
+# Allow inbound HTTP from internet — Floating IP access
+resource "ibm_is_security_group_rule" "vsi_inbound_http" {
+  group     = ibm_is_security_group.vsi.id
+  direction = "inbound"
+  remote    = "0.0.0.0/0"
+  protocol  = "tcp"
+  port_min  = 80
+  port_max  = 80
+}
+
+# Allow inbound HTTPS from internet
+resource "ibm_is_security_group_rule" "vsi_inbound_https" {
+  group     = ibm_is_security_group.vsi.id
+  direction = "inbound"
+  remote    = "0.0.0.0/0"
+  protocol  = "tcp"
+  port_min  = 443
+  port_max  = 443
+}
+
+# Allow all outbound (dnf updates, Vault API calls, IBM Cloud API)
 resource "ibm_is_security_group_rule" "vsi_outbound_all" {
   group     = ibm_is_security_group.vsi.id
   direction = "outbound"
