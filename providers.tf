@@ -13,16 +13,24 @@
 #
 # ── Required TFE workspace env vars (set once in TFE UI) ────────
 #   TFC_VAULT_PROVIDER_AUTH  = true
-#   TFC_DEFAULT_VAULT_ADDR   = <vault_url>
+#   TFC_DEFAULT_VAULT_ADDR   = https://vault-cluster-3931-public-vault-0d5d4e35.e84a65be.z1.hashicorp.cloud:8200
 #   TFC_VAULT_NAMESPACE      = admin
 #   TFC_VAULT_PLAN_ROLE      = tfc-role
 #   TFC_VAULT_APPLY_ROLE     = tfc-role
+#
+# ── Why the address is hardcoded here (not from var.vault_address) ──
+#   TFC dynamic credentials inject the VAULT_TOKEN via TFC_DEFAULT_VAULT_ADDR,
+#   but the vault provider's 'address' argument controls the DNS target for
+#   all subsequent API calls. Using a variable here caused the provider to
+#   briefly connect to the wrong cluster before tfvars was loaded.
+#   Hardcoding the address in the provider block eliminates that race.
 # ---------------------------------------------------------------
 
 # ── Vault provider (token injected by TFE dynamic creds) ─────────
 provider "vault" {
-  address   = var.vault_address
-  namespace = var.vault_namespace
+  # Address hardcoded — must match TFC_DEFAULT_VAULT_ADDR exactly
+  address   = "https://vault-cluster-3931-public-vault-0d5d4e35.e84a65be.z1.hashicorp.cloud:8200"
+  namespace = "admin"
 }
 
 # ── IBM API key from Vault ────────────────────────────────────────

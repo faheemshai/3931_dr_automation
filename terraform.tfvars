@@ -63,7 +63,7 @@ app_port          = 80
 health_check_path = "/"
 
 # ── Vault ────────────────────────────────────────────────────────
-vault_address     = "https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200"
+vault_address     = "https://vault-cluster-3931-public-vault-0d5d4e35.e84a65be.z1.hashicorp.cloud:8200"
 vault_namespace   = "admin"
 vault_mount_path  = "kv"
 vault_secret_path = "IBM_cloud"
