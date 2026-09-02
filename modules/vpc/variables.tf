@@ -83,3 +83,8 @@ variable "ssh_public_key" {
   type        = string
   sensitive   = true
 }
+
+variable "ibm_resource_group_id" {
+  description = "IBM Cloud resource group ID — SSH key and any new VPC/subnet are created in this group"
+  type        = string
+}
