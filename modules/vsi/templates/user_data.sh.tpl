@@ -68,6 +68,38 @@ OK
 HEALTH
 
 # ── nginx configuration ───────────────────────────────────────────
+# On RHEL, the default server block lives inside /etc/nginx/nginx.conf
+# (not in conf.d/default.conf as on Debian/Ubuntu).
+# We replace nginx.conf wholesale with a minimal config that only
+# includes conf.d/*.conf — this removes the built-in RHEL test page.
+cat > /etc/nginx/nginx.conf <<'NGINXMAIN'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /run/nginx.pid;
+
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  /var/log/nginx/access.log  main;
+    sendfile            on;
+    tcp_nopush          on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+    include /etc/nginx/conf.d/*.conf;
+}
+NGINXMAIN
+
+# Write the app server block into conf.d
 cat > /etc/nginx/conf.d/app.conf <<'NGINX'
 server {
     listen       80 default_server;
@@ -87,9 +119,6 @@ server {
     }
 }
 NGINX
-
-# Remove the default nginx server block to avoid conflicts
-rm -f /etc/nginx/conf.d/default.conf
 
 # ── Enable and start nginx ────────────────────────────────────────
 systemctl enable nginx
