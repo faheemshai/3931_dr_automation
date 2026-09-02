@@ -28,6 +28,11 @@ variable "app_port" {
   default     = 80
 }
 
+variable "ibm_resource_group_id" {
+  description = "IBM Cloud resource group ID — the LB is created in this group"
+  type        = string
+}
+
 variable "health_check_path" {
   description = "HTTP path the LB health monitor uses for member health checks"
   type        = string

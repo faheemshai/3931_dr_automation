@@ -22,6 +22,11 @@ variable "ssh_allowed_cidr" {
   type        = string
 }
 
+variable "ibm_resource_group_id" {
+  description = "IBM Cloud resource group ID — all security groups are created in this group"
+  type        = string
+}
+
 variable "app_port" {
   description = "TCP port the web application listens on"
   type        = number

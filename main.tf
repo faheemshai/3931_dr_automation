@@ -75,11 +75,12 @@ module "security_groups_primary" {
     ibm = ibm.primary
   }
 
-  project          = var.project
-  environment      = var.environment
-  vpc_id           = module.networking_primary.vpc_id
-  ssh_allowed_cidr = var.ssh_allowed_cidr
-  app_port         = var.app_port
+  project               = var.project
+  environment           = var.environment
+  ibm_resource_group_id = var.ibm_resource_group_id
+  vpc_id                = module.networking_primary.vpc_id
+  ssh_allowed_cidr      = var.ssh_allowed_cidr
+  app_port              = var.app_port
 }
 
 module "alb_primary" {
@@ -88,12 +89,13 @@ module "alb_primary" {
     ibm = ibm.primary
   }
 
-  project           = var.project
-  environment       = var.environment
-  ibm_region        = var.ibm_region_primary
-  subnet_id         = module.networking_primary.subnet_id
-  app_port          = var.app_port
-  health_check_path = var.health_check_path
+  project               = var.project
+  environment           = var.environment
+  ibm_resource_group_id = var.ibm_resource_group_id
+  ibm_region            = var.ibm_region_primary
+  subnet_id             = module.networking_primary.subnet_id
+  app_port              = var.app_port
+  health_check_path     = var.health_check_path
 }
 
 module "vsi_primary" {
@@ -161,11 +163,12 @@ module "security_groups_dr" {
     ibm = ibm.dr
   }
 
-  project          = var.project
-  environment      = "${var.environment}-dr"
-  vpc_id           = module.networking_dr[0].vpc_id
-  ssh_allowed_cidr = var.ssh_allowed_cidr
-  app_port         = var.app_port
+  project               = var.project
+  environment           = "${var.environment}-dr"
+  ibm_resource_group_id = var.ibm_resource_group_id
+  vpc_id                = module.networking_dr[0].vpc_id
+  ssh_allowed_cidr      = var.ssh_allowed_cidr
+  app_port              = var.app_port
 }
 
 module "alb_dr" {
@@ -175,12 +178,13 @@ module "alb_dr" {
     ibm = ibm.dr
   }
 
-  project           = var.project
-  environment       = "${var.environment}-dr"
-  ibm_region        = var.ibm_region_dr
-  subnet_id         = module.networking_dr[0].subnet_id
-  app_port          = var.app_port
-  health_check_path = var.health_check_path
+  project               = var.project
+  environment           = "${var.environment}-dr"
+  ibm_resource_group_id = var.ibm_resource_group_id
+  ibm_region            = var.ibm_region_dr
+  subnet_id             = module.networking_dr[0].subnet_id
+  app_port              = var.app_port
+  health_check_path     = var.health_check_path
 }
 
 module "vsi_dr" {

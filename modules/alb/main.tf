@@ -11,9 +11,10 @@ locals {
 
 # ── Application Load Balancer ─────────────────────────────────────
 resource "ibm_is_lb" "this" {
-  name    = "${local.name_prefix}-lb"
-  subnets = [var.subnet_id]
-  type    = "public"
+  name           = "${local.name_prefix}-lb"
+  subnets        = [var.subnet_id]
+  type           = "public"
+  resource_group = var.ibm_resource_group_id
 
   tags = ["project:${var.project}", "env:${var.environment}", "managed-by:terraform"]
 }

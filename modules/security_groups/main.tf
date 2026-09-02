@@ -14,8 +14,9 @@ locals {
 
 # ── Load Balancer Security Group ─────────────────────────────────
 resource "ibm_is_security_group" "lb" {
-  name = "${local.name_prefix}-lb-sg"
-  vpc  = var.vpc_id
+  name           = "${local.name_prefix}-lb-sg"
+  vpc            = var.vpc_id
+  resource_group = var.ibm_resource_group_id
 
   tags = ["project:${var.project}", "env:${var.environment}", "tier:lb"]
 }
@@ -40,8 +41,9 @@ resource "ibm_is_security_group_rule" "lb_outbound_all" {
 
 # ── VSI Security Group ────────────────────────────────────────────
 resource "ibm_is_security_group" "vsi" {
-  name = "${local.name_prefix}-vsi-sg"
-  vpc  = var.vpc_id
+  name           = "${local.name_prefix}-vsi-sg"
+  vpc            = var.vpc_id
+  resource_group = var.ibm_resource_group_id
 
   tags = ["project:${var.project}", "env:${var.environment}", "tier:app"]
 }

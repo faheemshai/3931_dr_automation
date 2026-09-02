@@ -97,8 +97,9 @@ locals {
 
 # ── SSH Key (public key loaded from Vault) ────────────────────────
 resource "ibm_is_ssh_key" "vault_key" {
-  name       = "${local.name_prefix}-vault-key"
-  public_key = var.ssh_public_key
+  name           = "${local.name_prefix}-vault-key"
+  public_key     = var.ssh_public_key
+  resource_group = var.ibm_resource_group_id
 
   tags = ["project:${var.project}", "env:${var.environment}", "source:vault"]
 }
