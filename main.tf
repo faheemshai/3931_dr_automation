@@ -53,11 +53,12 @@ module "networking_primary" {
     ibm = ibm.primary
   }
 
-  project              = var.project
-  environment          = var.environment
-  ibm_region           = var.ibm_region_primary
-  ibm_zone             = var.ibm_zone_primary
-  subnet_address_count = var.subnet_address_count
+  project               = var.project
+  environment           = var.environment
+  ibm_resource_group_id = var.ibm_resource_group_id
+  ibm_region            = var.ibm_region_primary
+  ibm_zone              = var.ibm_zone_primary
+  subnet_address_count  = var.subnet_address_count
 
   # ID-based lookup — us-south dedicated lab account
   existing_vpc_id    = var.existing_vpc_id_primary       # r006-76dee245-0417-4682-951e-2b1d149a7639
@@ -140,11 +141,12 @@ module "networking_dr" {
     ibm = ibm.dr
   }
 
-  project              = var.project
-  environment          = "${var.environment}-dr"
-  ibm_region           = var.ibm_region_dr
-  ibm_zone             = var.ibm_zone_dr
-  subnet_address_count = var.subnet_address_count
+  project               = var.project
+  environment           = "${var.environment}-dr"
+  ibm_resource_group_id = var.ibm_resource_group_id
+  ibm_region            = var.ibm_region_dr
+  ibm_zone              = var.ibm_zone_dr
+  subnet_address_count  = var.subnet_address_count
 
   # ID-based lookup — eu-de dedicated lab account
   existing_vpc_id    = var.existing_vpc_id_dr       # r010-75fc4ba7-8a56-4a42-baaa-b6691a7f24ac
