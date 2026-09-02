@@ -43,6 +43,8 @@ resource "ibm_is_instance" "app" {
     instance_num = count.index + 1
     ibm_region   = var.ibm_region
     ibm_zone     = var.ibm_zone
+    image_name   = data.ibm_is_image.golden.name
+    vsi_profile  = var.vsi_profile
   })
 
   tags = [

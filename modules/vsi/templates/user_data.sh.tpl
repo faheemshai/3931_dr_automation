@@ -1,14 +1,14 @@
 #!/bin/bash
 # ---------------------------------------------------------------
 # User Data – IBM Cloud VSI bootstrap
-# Image  : ibm-centos-stream-9-amd64-17
-# Profile: bxf-2x8  (Flex | 2 vCPU / 8 GB RAM)
+# Image  : ${image_name}
+# Profile: ${vsi_profile}
 # Region : ${ibm_region} / ${ibm_zone}
 #
 # Installs nginx and serves a basic status page showing:
 #   - Project / environment (injected by Terraform)
 #   - Instance number, hostname and private IP
-# SSH key was provisioned via Vault Enterprise → ibm_is_ssh_key
+# SSH key was provisioned via HCP Vault → ibm_is_ssh_key
 # ---------------------------------------------------------------
 set -euo pipefail
 
@@ -51,12 +51,12 @@ cat > /usr/share/nginx/html/index.html <<HTML
     <tr><td>Hostname</td><td>$HOSTNAME</td></tr>
     <tr><td>Private IP</td><td>$PRIVATE_IP</td></tr>
     <tr><td>Region / Zone</td><td>${ibm_region} / ${ibm_zone}</td></tr>
-    <tr><td>Image</td><td>ibm-centos-stream-9-amd64-17</td></tr>
-    <tr><td>Profile</td><td>bxf-2x8 (Flex | 2 vCPU / 8 GB)</td></tr>
-    <tr><td>Secret source</td><td>Vault Enterprise &nbsp;&#8594;&nbsp; kv/terraform</td></tr>
+    <tr><td>Image</td><td>${image_name}</td></tr>
+    <tr><td>Profile</td><td>${vsi_profile}</td></tr>
+    <tr><td>Secret source</td><td>HCP Vault &nbsp;&#8594;&nbsp; kv/IBM_cloud</td></tr>
   </table>
   <p style="margin-top:24px; font-size:12px; color:#57606a;">
-    Managed by Terraform Enterprise &nbsp;|&nbsp; Secrets from Vault Enterprise
+    Managed by HCP Terraform &nbsp;|&nbsp; Secrets from HCP Vault
   </p>
 </body>
 </html>
