@@ -13,25 +13,24 @@ variable "environment" {
 }
 
 variable "ibm_resource_group_id" {
-  description = "IBM Cloud resource group ID — VSIs are placed in this group"
+  description = "IBM Cloud resource group ID — VSIs and Floating IPs are placed in this group"
   type        = string
-  default     = "90733208e12b46eda9c4fbc130b8e426"
 }
 
 variable "ibm_region" {
-  description = "IBM Cloud region (e.g. eu-de) — passed into user_data template for display"
+  description = "IBM Cloud region (e.g. us-south) — passed into user_data template"
   type        = string
 }
 
 variable "ibm_zone" {
-  description = "IBM Cloud zone to launch VSIs into (e.g. eu-de-2)"
+  description = "IBM Cloud zone to launch VSIs into (e.g. us-south-1)"
   type        = string
 }
 
 variable "vsi_count" {
   description = "Number of VSI instances to create"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "vsi_profile" {
@@ -40,7 +39,7 @@ variable "vsi_profile" {
 }
 
 variable "image_id" {
-  description = "IBM Cloud image ID (UUID) for the VSI"
+  description = "IBM Cloud image ID (UUID) for the VSI — from Packer golden image"
   type        = string
 }
 
@@ -55,12 +54,7 @@ variable "subnet_id" {
 }
 
 variable "ssh_key_id" {
-  description = "ID of the IBM Cloud SSH key (public key loaded from Vault)"
-  type        = string
-}
-
-variable "lb_sg_id" {
-  description = "ID of the load balancer security group (passed through for dependency ordering)"
+  description = "ID of the IBM Cloud SSH key (registered from Vault public key)"
   type        = string
 }
 
@@ -69,18 +63,8 @@ variable "vsi_sg_id" {
   type        = string
 }
 
-variable "lb_id" {
-  description = "ID of the IBM Cloud Application Load Balancer"
-  type        = string
-}
-
-variable "lb_pool_id" {
-  description = "ID of the LB back-end pool to register VSIs into"
-  type        = string
-}
-
 variable "app_port" {
-  description = "TCP port the web application listens on (used for pool member registration)"
+  description = "TCP port the web application listens on"
   type        = number
   default     = 80
 }

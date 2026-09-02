@@ -4,12 +4,15 @@
 # PRIMARY  : us-south (Dallas)   — always running
 # DR       : eu-de   (Frankfurt) — activated on failover
 #
+# Architecture: Floating IP per VSI — NO load balancer.
+# Each VSI is directly reachable via its own public Floating IP.
+#
 # Enterprise showcase:
 #   • IBM API key sourced from Vault KV — NEVER in code or state
 #   • SSH key sourced from Vault KV — NEVER in code or state
-#   • Golden image from Packer build — consumed by image ID
+#   • Golden image from HCP Packer — consumed by image ID
+#   • Floating IPs for direct public VSI access
 #   • DR region flagged with role=dr tags for failover targeting
-#   • Identical module calls per region — one source of truth
 # ---------------------------------------------------------------
 
 # ── 1. Vault — read IBM credentials (single read, shared) ────────
@@ -38,7 +41,7 @@ data "hcp_packer_artifact" "golden_dr" {
 }
 
 locals {
-  # Dynamic lookup from HCP Packer with manual override fallback
+  # Manual override in terraform.tfvars takes precedence over HCP Packer lookup
   image_id_primary = var.golden_image_id_us_south != "" ? var.golden_image_id_us_south : data.hcp_packer_artifact.golden_primary.external_identifier
   image_id_dr      = var.golden_image_id_eu_de != "" ? var.golden_image_id_eu_de : data.hcp_packer_artifact.golden_dr.external_identifier
 }
@@ -60,10 +63,8 @@ module "networking_primary" {
   ibm_zone              = var.ibm_zone_primary
   subnet_address_count  = var.subnet_address_count
 
-  # ID-based lookup — us-south dedicated lab account
-  existing_vpc_id    = var.existing_vpc_id_primary       # r006-76dee245-0417-4682-951e-2b1d149a7639
-  existing_subnet_id = var.existing_subnet_id_primary    # 0717-c20d5d2d-6216-4b99-88d7-8b441ef20a9e
-  # Name-based fallback (only used when ID vars above are empty)
+  existing_vpc_id      = var.existing_vpc_id_primary
+  existing_subnet_id   = var.existing_subnet_id_primary
   existing_vpc_name    = var.existing_vpc_name_primary
   existing_subnet_name = var.existing_subnet_name_primary
 
@@ -84,21 +85,6 @@ module "security_groups_primary" {
   app_port              = var.app_port
 }
 
-module "alb_primary" {
-  source = "./modules/alb"
-  providers = {
-    ibm = ibm.primary
-  }
-
-  project               = var.project
-  environment           = var.environment
-  ibm_resource_group_id = var.ibm_resource_group_id
-  ibm_region            = var.ibm_region_primary
-  subnet_id             = module.networking_primary.subnet_id
-  app_port              = var.app_port
-  health_check_path     = var.health_check_path
-}
-
 module "vsi_primary" {
   source = "./modules/vsi"
   providers = {
@@ -107,27 +93,19 @@ module "vsi_primary" {
 
   project               = var.project
   environment           = var.environment
-  ibm_resource_group_id = var.ibm_resource_group_id   # 90733208e12b46eda9c4fbc130b8e426
+  ibm_resource_group_id = var.ibm_resource_group_id
   ibm_region            = var.ibm_region_primary
   ibm_zone              = var.ibm_zone_primary
   vsi_count             = var.vsi_count
   vsi_profile           = var.vsi_profile
-
-  # Golden image from Packer — resolved dynamically
-  image_id     = local.image_id_primary
-
-  vpc_id       = module.networking_primary.vpc_id
-  subnet_id    = module.networking_primary.subnet_id
-  ssh_key_id   = module.networking_primary.ssh_key_id
-  lb_sg_id     = module.security_groups_primary.lb_sg_id
-  vsi_sg_id    = module.security_groups_primary.vsi_sg_id
-  lb_id        = module.alb_primary.lb_id
-  lb_pool_id   = module.alb_primary.pool_id
-  app_port     = var.app_port
-
-  # DR metadata — used by failover scripts to target the right VSIs
-  dr_role      = "primary"
-  dr_pair      = "us-south-eu-de"
+  image_id              = local.image_id_primary
+  vpc_id                = module.networking_primary.vpc_id
+  subnet_id             = module.networking_primary.subnet_id
+  ssh_key_id            = module.networking_primary.ssh_key_id
+  vsi_sg_id             = module.security_groups_primary.vsi_sg_id
+  app_port              = var.app_port
+  dr_role               = "primary"
+  dr_pair               = "us-south-eu-de"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -148,10 +126,8 @@ module "networking_dr" {
   ibm_zone              = var.ibm_zone_dr
   subnet_address_count  = var.subnet_address_count
 
-  # ID-based lookup — eu-de dedicated lab account
-  existing_vpc_id    = var.existing_vpc_id_dr       # r010-75fc4ba7-8a56-4a42-baaa-b6691a7f24ac
-  existing_subnet_id = var.existing_subnet_id_dr    # 02b7-df5e6a98-fa9c-4e87-b67c-057d360b62ba
-  # Name-based fallback (only used when ID vars above are empty)
+  existing_vpc_id      = var.existing_vpc_id_dr
+  existing_subnet_id   = var.existing_subnet_id_dr
   existing_vpc_name    = var.existing_vpc_name_dr
   existing_subnet_name = var.existing_subnet_name_dr
 
@@ -173,22 +149,6 @@ module "security_groups_dr" {
   app_port              = var.app_port
 }
 
-module "alb_dr" {
-  count  = var.DR_infra ? 1 : 0
-  source = "./modules/alb"
-  providers = {
-    ibm = ibm.dr
-  }
-
-  project               = var.project
-  environment           = "${var.environment}-dr"
-  ibm_resource_group_id = var.ibm_resource_group_id
-  ibm_region            = var.ibm_region_dr
-  subnet_id             = module.networking_dr[0].subnet_id
-  app_port              = var.app_port
-  health_check_path     = var.health_check_path
-}
-
 module "vsi_dr" {
   count  = var.DR_infra ? 1 : 0
   source = "./modules/vsi"
@@ -198,23 +158,17 @@ module "vsi_dr" {
 
   project               = var.project
   environment           = "${var.environment}-dr"
-  ibm_resource_group_id = var.ibm_resource_group_id   # 90733208e12b46eda9c4fbc130b8e426
+  ibm_resource_group_id = var.ibm_resource_group_id
   ibm_region            = var.ibm_region_dr
   ibm_zone              = var.ibm_zone_dr
   vsi_count             = var.vsi_count
   vsi_profile           = var.vsi_profile
-
-  image_id     = local.image_id_dr
-
-  vpc_id       = module.networking_dr[0].vpc_id
-  subnet_id    = module.networking_dr[0].subnet_id
-  ssh_key_id   = module.networking_dr[0].ssh_key_id
-  lb_sg_id     = module.security_groups_dr[0].lb_sg_id
-  vsi_sg_id    = module.security_groups_dr[0].vsi_sg_id
-  lb_id        = module.alb_dr[0].lb_id
-  lb_pool_id   = module.alb_dr[0].pool_id
-  app_port     = var.app_port
-
-  dr_role      = "dr"
-  dr_pair      = "us-south-eu-de"
+  image_id              = local.image_id_dr
+  vpc_id                = module.networking_dr[0].vpc_id
+  subnet_id             = module.networking_dr[0].subnet_id
+  ssh_key_id            = module.networking_dr[0].ssh_key_id
+  vsi_sg_id             = module.security_groups_dr[0].vsi_sg_id
+  app_port              = var.app_port
+  dr_role               = "dr"
+  dr_pair               = "us-south-eu-de"
 }

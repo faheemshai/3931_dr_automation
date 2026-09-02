@@ -13,11 +13,6 @@ output "primary_subnet_id" {
   value       = module.networking_primary.subnet_id
 }
 
-output "primary_lb_hostname" {
-  description = "Primary ALB hostname — DNS entry for normal traffic"
-  value       = module.alb_primary.lb_hostname
-}
-
 output "primary_vsi_ids" {
   description = "Primary VSI instance IDs"
   value       = module.vsi_primary.vsi_ids
@@ -26,6 +21,11 @@ output "primary_vsi_ids" {
 output "primary_vsi_private_ips" {
   description = "Primary VSI private IPs"
   value       = module.vsi_primary.vsi_private_ips
+}
+
+output "primary_floating_ips" {
+  description = "Primary VSI public Floating IPs — use these to access VSIs via SSH/HTTP"
+  value       = module.vsi_primary.floating_ips
 }
 
 # ── DR eu-de ─────────────────────────────────────────────────────
@@ -39,11 +39,6 @@ output "dr_subnet_id" {
   value       = var.DR_infra ? module.networking_dr[0].subnet_id : ""
 }
 
-output "dr_lb_hostname" {
-  description = "DR ALB hostname — DNS entry for failover traffic"
-  value       = var.DR_infra ? module.alb_dr[0].lb_hostname : ""
-}
-
 output "dr_vsi_ids" {
   description = "DR VSI instance IDs"
   value       = var.DR_infra ? module.vsi_dr[0].vsi_ids : []
@@ -52,6 +47,11 @@ output "dr_vsi_ids" {
 output "dr_vsi_private_ips" {
   description = "DR VSI private IPs"
   value       = var.DR_infra ? module.vsi_dr[0].vsi_private_ips : []
+}
+
+output "dr_floating_ips" {
+  description = "DR VSI public Floating IPs"
+  value       = var.DR_infra ? module.vsi_dr[0].floating_ips : []
 }
 
 # ── Vault metadata ───────────────────────────────────────────────

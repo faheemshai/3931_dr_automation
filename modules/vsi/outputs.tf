@@ -17,7 +17,12 @@ output "vsi_private_ips" {
   value       = [for inst in ibm_is_instance.app : inst.primary_network_interface[0].primary_ip[0].address]
 }
 
-output "pool_member_ids" {
-  description = "LB pool member IDs"
-  value       = ibm_is_lb_pool_member.app[*].id
+output "floating_ips" {
+  description = "Public Floating IP addresses — students use these to access their VSI"
+  value       = ibm_is_floating_ip.app[*].address
+}
+
+output "floating_ip_ids" {
+  description = "Floating IP resource IDs"
+  value       = ibm_is_floating_ip.app[*].id
 }
