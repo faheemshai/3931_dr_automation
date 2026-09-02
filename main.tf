@@ -66,7 +66,7 @@ module "networking_primary" {
   existing_vpc_name    = var.existing_vpc_name_primary
   existing_subnet_name = var.existing_subnet_name_primary
 
-  ssh_public_key = file("${path.root}/../ent_demo_ed25519.pub")
+  ssh_public_key = local.ssh_public_key
 }
 
 module "security_groups_primary" {
@@ -151,7 +151,7 @@ module "networking_dr" {
   existing_vpc_name    = var.existing_vpc_name_dr
   existing_subnet_name = var.existing_subnet_name_dr
 
-  ssh_public_key = file("${path.root}/../ent_demo_ed25519.pub")
+  ssh_public_key = local.ssh_public_key
 }
 
 module "security_groups_dr" {

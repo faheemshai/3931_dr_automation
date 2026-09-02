@@ -32,7 +32,8 @@ data "vault_kv_secret_v2" "ibm_credentials" {
 }
 
 locals {
-  ibm_api_key = data.vault_kv_secret_v2.ibm_credentials.data["ibm_api_key"]
+  ibm_api_key    = data.vault_kv_secret_v2.ibm_credentials.data["ibm_api_key"]
+  ssh_public_key = data.vault_kv_secret_v2.ibm_credentials.data["public_key"]
 }
 
 # ── IBM Cloud provider — PRIMARY us-south ────────────────────────
