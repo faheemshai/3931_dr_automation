@@ -26,15 +26,15 @@ module "vault_integration" {
 data "hcp_packer_artifact" "golden_primary" {
   bucket_name         = "rhel92-golden"
   platform            = "ibmcloud"
-  region              = var.ibm_region_primary
-  version_fingerprint = "fp-20260901180747"
+  region              = var.ibm_region_primary   # us-south
+  version_fingerprint = "fp-20260902165139"
 }
 
 data "hcp_packer_artifact" "golden_dr" {
   bucket_name         = "rhel92-golden"
   platform            = "ibmcloud"
-  region              = var.ibm_region_primary # fallback during Task 1 / Task 2 setup
-  version_fingerprint = "fp-20260901180747"
+  region              = var.ibm_region_dr         # eu-de
+  version_fingerprint = "fp-20260902165139"
 }
 
 locals {
