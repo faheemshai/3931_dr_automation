@@ -96,9 +96,12 @@ locals {
 }
 
 # ── SSH Key (public key loaded from Vault) ────────────────────────
+# Key type must be declared explicitly — IBM Cloud VPC defaults to rsa
+# and rejects ed25519 keys without this field set.
 resource "ibm_is_ssh_key" "vault_key" {
   name           = "${local.name_prefix}-vault-key"
   public_key     = var.ssh_public_key
+  type           = "ed25519"
   resource_group = var.ibm_resource_group_id
 
   tags = ["project:${var.project}", "env:${var.environment}", "source:vault"]
