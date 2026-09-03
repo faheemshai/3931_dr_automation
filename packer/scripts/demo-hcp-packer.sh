@@ -260,32 +260,102 @@ ok "Enterprise:  image policy enforced — you cannot launch an unpatched VSI"
 pause
 
 # ─────────────────────────────────────────────────────────────────
-section "PART 5 — SBOM: every package inventoried before capture"
+section "PART 5 — What is baked into this image: full package inventory"
 # ─────────────────────────────────────────────────────────────────
 printf "\n"
+printf "  ${BOLD}Every package below was installed and verified during the Packer build.${RESET}\n"
+printf "  ${BOLD}They are permanently baked in — not applied at boot time.${RESET}\n"
+printf "\n"
+
+printf "  ${CYAN}── Core packages (mandatory — build fails if any are missing) ─────────${RESET}\n"
+kv "  nginx"      "Web server — serves the app on port 80/443"
+kv "  jq"         "JSON CLI — used by DR scripts and Vault reads"
+kv "  curl"       "HTTP client — health checks and API calls"
+kv "  openssl"    "TLS toolkit — certificate operations"
+kv "  ca-certificates" "Trusted CA bundle — TLS verification"
+kv "  firewalld"  "Host firewall daemon"
+kv "  chrony"     "NTP time synchronisation (replaces ntpd)"
+kv "  rsyslog"    "System log daemon"
+kv "  audit"      "Linux Audit Framework — required by CIS"
+printf "\n"
+
+printf "  ${CYAN}── Optional packages (installed best-effort) ───────────────────────────${RESET}\n"
+kv "  net-tools"  "ifconfig, netstat — network diagnostics"
+kv "  bind-utils" "dig, nslookup — DNS diagnostics"
+kv "  unzip"      "Archive extraction"
+kv "  policycoreutils-python-utils" "semanage — SELinux policy management"
+kv "  setools-console" "sesearch, seinfo — SELinux auditing"
+printf "\n"
+
+printf "  ${CYAN}── Services DISABLED (attack surface reduction) ────────────────────────${RESET}\n"
+kv "  bluetooth"    "Bluetooth stack — not needed on cloud VSIs"
+kv "  avahi-daemon" "mDNS/DNS-SD — local network discovery disabled"
+kv "  cups"         "Printing service — disabled"
+kv "  nfs-server"   "NFS file sharing — disabled"
+kv "  rpcbind"      "RPC port mapper — disabled with NFS"
+kv "  rsyncd"       "Remote sync daemon — disabled"
+kv "  telnet"       "Unencrypted remote shell — disabled"
+kv "  vsftpd"       "FTP server — disabled"
+kv "  httpd"        "Apache (nginx is used instead) — disabled"
+printf "\n"
+
+printf "  ${CYAN}── sysctl kernel hardening (CIS RHEL 9 Level 1) ───────────────────────${RESET}\n"
+kv "  tcp_syncookies=1"              "SYN flood protection"
+kv "  accept_source_route=0"        "IP source routing disabled"
+kv "  accept_redirects=0"           "ICMP redirect acceptance disabled"
+kv "  send_redirects=0"             "ICMP redirect sending disabled"
+kv "  icmp_echo_ignore_broadcasts=1" "ICMP broadcast ignored"
+kv "  log_martians=1"               "Suspicious packets logged"
+kv "  disable_ipv6=1"               "IPv6 disabled (not used in lab)"
+kv "  suid_dumpable=0"              "SUID core dumps restricted"
+kv "  randomize_va_space=2"         "ASLR fully enabled"
+printf "\n"
+
+printf "  ${CYAN}── SSH hardening (sshd_config.d/99-lab-hardening.conf) ─────────────────${RESET}\n"
+kv "  PasswordAuthentication no"    "Key-only login — password auth blocked"
+kv "  PermitRootLogin without-password" "Root SSH only via key"
+kv "  MaxAuthTries 4"               "Brute-force attempts limited to 4"
+kv "  X11Forwarding no"             "X11 forwarding disabled"
+kv "  AllowTcpForwarding no"        "TCP tunnelling disabled"
+kv "  LoginGraceTime 30"            "Auth must complete within 30 seconds"
+kv "  Protocol 2"                   "SSHv1 prohibited"
+printf "\n"
+
+printf "  ${CYAN}── Services ENABLED at boot ────────────────────────────────────────────${RESET}\n"
+kv "  nginx"    "Starts automatically — serves app on boot"
+kv "  auditd"   "Audit daemon — kernel event logging"
+kv "  chronyd"  "Time sync — required for TLS cert validity"
+kv "  rsyslog"  "Log aggregation"
+kv "  firewalld" "Host firewall — DROP zone, ssh/http/https only"
+printf "\n"
+
+# ── SBOM file (present after a Packer Enterprise build with hcp-sbom) ──
 # Suppress "No such file or directory" from glob when sbom/ doesn't exist yet
 SBOM_FILE=$([ -d "${PACKER_DIR}/sbom" ] && ls -t "${PACKER_DIR}/sbom/"*.json 2>/dev/null | grep -v '.gitkeep' | head -1 || true)
 if [ -n "${SBOM_FILE}" ]; then
   SBOM_COMPONENTS=$(jq '.components | length' "${SBOM_FILE}" 2>/dev/null || echo "N/A")
   SBOM_CREATED=$(jq -r '.metadata.timestamp' "${SBOM_FILE}" 2>/dev/null || echo "N/A")
   SBOM_NAME=$(basename "${SBOM_FILE}")
+  printf "  ${CYAN}── CycloneDX SBOM (full package inventory from Packer Enterprise) ──────${RESET}\n"
   ok "SBOM file: packer/sbom/${SBOM_NAME}"
-  kv "Components scanned:" "${SBOM_COMPONENTS} packages"
-  kv "Generated at:"       "${SBOM_CREATED}"
-  kv "Format:"             "CycloneDX JSON (Syft embedded in Packer Enterprise)"
+  kv "  Components scanned:" "${SBOM_COMPONENTS} packages"
+  kv "  Generated at:"       "${SBOM_CREATED}"
+  kv "  Format:"             "CycloneDX JSON — consumable by Grype, Trivy, Snyk"
   printf "\n"
-  info "Sample packages (first 6):"
-  jq -r '.components[:6][] | "    \(.name)  \(.version)"' "${SBOM_FILE}" 2>/dev/null
+  info "Sample packages from SBOM (first 8):"
+  jq -r '.components[:8][] | "    \(.name)  \(.version)"' "${SBOM_FILE}" 2>/dev/null
   printf "\n"
-  ok "Any CVE scanner (Grype, Trivy, Snyk) can consume this CycloneDX SBOM"
-  ok "Open-source Packer: no SBOM capability whatsoever"
-  ok "Enterprise: SBOM auto-generated from embedded Syft SDK — no extra tools"
 else
-  info "No SBOM JSON in packer/sbom/ yet — generated by hcp-sbom provisioner on next build"
-  kv "Provisioner used:" "hcp-sbom with auto_generate=true"
-  kv "Scanner:"          "Syft embedded in Packer Enterprise binary"
-  kv "Expected output:"  "~42,000 component CycloneDX JSON"
+  printf "  ${CYAN}── CycloneDX SBOM ──────────────────────────────────────────────────────${RESET}\n"
+  info "Full SBOM generated by Packer Enterprise hcp-sbom provisioner at build time"
+  kv "  Scanner:"         "Syft embedded in Packer Enterprise binary"
+  kv "  Expected output:" "~42,000 components — every RPM, library, binary on the image"
+  kv "  Format:"          "CycloneDX JSON — consumable by Grype, Trivy, Snyk"
+  kv "  Key point:"       "Open-source Packer has NO SBOM capability — Enterprise only"
 fi
+printf "\n"
+ok "Open-source: zero visibility into what is in the image after capture"
+ok "Enterprise:  every package, version, and checksum recorded before capture"
 pause
 
 # ─────────────────────────────────────────────────────────────────
