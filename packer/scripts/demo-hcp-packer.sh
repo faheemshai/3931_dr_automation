@@ -35,7 +35,7 @@ ORG="d964990b-39d2-42d2-b37b-bb8ce075c701"
 PROJ="48e86032-f0da-45af-a68d-67c67d1f383b"
 BUCKET="rhel92-golden"
 
-export VAULT_ADDR="${VAULT_ADDR:-https://vault-cluster-public-vault-564045ad.ea599dfb.z1.hashicorp.cloud:8200}"
+export VAULT_ADDR="${VAULT_ADDR:-https://vault-cluster-3931-public-vault-0d5d4e35.e84a65be.z1.hashicorp.cloud:8200}"
 export VAULT_NAMESPACE="${VAULT_NAMESPACE:-admin}"
 
 section() {
@@ -223,7 +223,8 @@ pause
 section "PART 5 — SBOM: every package inventoried before capture"
 # ─────────────────────────────────────────────────────────────────
 printf "\n"
-SBOM_FILE=$(ls -t "${PACKER_DIR}/sbom/"*.json 2>/dev/null | grep -v '.gitkeep' | head -1)
+# Suppress "No such file or directory" from glob when sbom/ doesn't exist yet
+SBOM_FILE=$([ -d "${PACKER_DIR}/sbom" ] && ls -t "${PACKER_DIR}/sbom/"*.json 2>/dev/null | grep -v '.gitkeep' | head -1 || true)
 if [ -n "${SBOM_FILE}" ]; then
   SBOM_COMPONENTS=$(jq '.components | length' "${SBOM_FILE}" 2>/dev/null || echo "N/A")
   SBOM_CREATED=$(jq -r '.metadata.timestamp' "${SBOM_FILE}" 2>/dev/null || echo "N/A")
@@ -322,16 +323,15 @@ else
           warn "packer-manifest.json not found — cannot register"
         else
           # Read build details from manifest
-          REG_IMAGE_ID=$(jq -r  '.builds[-1].artifact_id'    "${MANIFEST}" 2>/dev/null)
-          REG_UUID=$(jq -r      '.builds[-1].packer_run_uuid' "${MANIFEST}" 2>/dev/null)
-          REG_BUILD_TIME=$(jq -r '.builds[-1].build_time'     "${MANIFEST}" 2>/dev/null)
-          REG_NAME=$(jq -r      '.builds[-1].name'            "${MANIFEST}" 2>/dev/null)
+          # Select the us-south entry by name so we always show the primary-region image.
+          REG_ENTRY=$(jq -c '.builds[] | select(.name | test("us_south"))' "${MANIFEST}" 2>/dev/null | tail -1)
+          REG_IMAGE_ID=$(printf '%s' "${REG_ENTRY}" | jq -r '.artifact_id'    2>/dev/null)
+          REG_UUID=$(printf '%s' "${REG_ENTRY}"     | jq -r '.packer_run_uuid' 2>/dev/null)
+          REG_BUILD_TIME=$(printf '%s' "${REG_ENTRY}" | jq -r '.build_time'   2>/dev/null)
+          REG_NAME=$(printf '%s' "${REG_ENTRY}"     | jq -r '.name'            2>/dev/null)
           REG_DATE=$(date -r "${REG_BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
                      date -d "@${REG_BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
                      date "+%Y-%m-%d")
-          # HCP Packer has a strict 40-character limit for fingerprints. Strip the
-          # generation prefix (e.g. 'r006-') to ensure the fingerprint fits (UUID is 36 chars).
-          REG_FINGERPRINT=$(echo "${REG_IMAGE_ID}" | sed -e 's/^[^-]*-//' | cut -c 1-40)
 
           printf "\n"
           kv "Image ID:"    "${REG_IMAGE_ID}"
@@ -340,7 +340,7 @@ else
           kv "Build date:"  "${REG_DATE}"
           printf "\n"
 
-          # Step 1 — create version
+          # Step 1 — create version (timestamp fingerprint — unique per demo run)
           REG_FINGERPRINT="fp-$(date "+%Y%m%d%H%M%S")"
           info "Creating version (fingerprint=${REG_FINGERPRINT})..."
           VER_RESP=$(_hcp --request POST \
@@ -436,8 +436,8 @@ section "PART 7 — Terraform consumes the golden image (closed loop)"
 printf "\n"
 info "terraform.tfvars — how Terraform knows which image to use:"
 printf "\n"
-grep -i "golden_image" "${REPO_DIR}/terraform.tfvars" 2>/dev/null | sed 's/^/    /' || \
-  printf "    golden_image_name_us_south = \"rhel92-golden-20260901061113-us-south\"\n"
+grep -i "golden_image_id" "${REPO_DIR}/terraform.tfvars" 2>/dev/null | sed 's/^/    /' || \
+printf "    golden_image_id_us_south = \"r006-fe8ccdb8-d39a-4c75-91d1-2f763b31f360\"\n"
 printf "\n"
 ok "Image name flows directly from packer-manifest.json → terraform.tfvars"
 ok "With hcp_packer data source: Terraform auto-pins to latest APPROVED version"

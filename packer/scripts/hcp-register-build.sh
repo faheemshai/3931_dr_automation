@@ -54,9 +54,9 @@ printf "${CYAN}═════════════════════�
 # ── Validate required env vars ────────────────────────────────
 if [ -z "${HCP_CLIENT_ID}" ] || [ -z "${HCP_CLIENT_SECRET}" ]; then
   warn "HCP_CLIENT_ID or HCP_CLIENT_SECRET not set — skipping HCP registration"
-  printf "\n  To register on the next build, run:\n"
-  printf "    ${CYAN}source student-tokens/student-sNN.env${RESET}\n"
-  printf "    ${CYAN}bash scripts/student-setup-env.sh${RESET}\n\n"
+  printf "\n  To register on the next build, export credentials before running packer:\n"
+  printf "    ${CYAN}export HCP_CLIENT_ID=\$(vault kv get -namespace=admin -mount=kv -field=client_id Packer)${RESET}\n"
+  printf "    ${CYAN}export HCP_CLIENT_SECRET=\$(vault kv get -namespace=admin -mount=kv -field=client_secret Packer)${RESET}\n\n"
   exit 0
 fi
 
