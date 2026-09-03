@@ -64,37 +64,69 @@ if [ $? -ne 0 ]; then
 fi
 
 # Locate instances matching dr-role:primary, env:ENVIRONMENT and project:STUDENT_ID
+# IBM Cloud VPC API does not include tags in ibmcloud is instances output.
+# Tags live in the global tagging service — use ibmcloud resource search instead.
 echo -e "${YELLOW}[*] Scanning for primary VSIs with tags: project:${STUDENT_ID}, env:${ENVIRONMENT}, dr-role:primary...${NC}"
+echo -e "${YELLOW}[*] Querying IBM Cloud global tagging service...${NC}"
 
-# Get instances as JSON and filter
-INSTANCES_JSON=$(ibmcloud is instances --output JSON 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$INSTANCES_JSON" ]; then
-    echo -e "${RED}[ERROR] Failed to retrieve VSIs from IBM Cloud.${NC}"
+SEARCH_RESULT=$(ibmcloud resource search \
+    "tags:\"project:${STUDENT_ID}\" AND tags:\"env:${ENVIRONMENT}\" AND tags:\"dr-role:primary\" AND type:instance" \
+    --output JSON 2>/dev/null)
+
+if [ $? -ne 0 ] || [ -z "$SEARCH_RESULT" ]; then
+    echo -e "${RED}[ERROR] Failed to query IBM Cloud global tagging service.${NC}"
     exit 1
 fi
 
-# Extract IDs of matching running instances
-MATCHING_IDS=$(echo "$INSTANCES_JSON" | jq -r --arg project "project:${STUDENT_ID}" --arg env "env:${ENVIRONMENT}" '.[] | select(.status == "running" and (.tags | contains([$project, $env, "dr-role:primary"]))) | .id')
+# Extract instance names from the search result
+MATCHING_NAMES=$(echo "$SEARCH_RESULT" | jq -r '.items[]? | select(.type == "instance") | .name')
 
-if [ -z "$MATCHING_IDS" ] || [ "$MATCHING_IDS" == "null" ]; then
-    echo -e "${GREEN}[✓] No running primary VSIs found matching the tags. Already stopped or not deployed.${NC}"
+if [ -z "$MATCHING_NAMES" ]; then
+    echo -e "${GREEN}[✓] No primary VSIs found matching the tags. Already stopped or not deployed.${NC}"
     exit 0
 fi
 
-echo -e "${RED}[!] DISASTER SIMULATION DETECTED! Stopping the following primary VSIs in ${REGION}:${NC}"
-for ID in $MATCHING_IDS; do
-    NAME=$(echo "$INSTANCES_JSON" | jq -r --arg id "$ID" '.[] | select(.id == $id) | .name')
-    echo -e "    - ${NAME} (${ID})"
-done
+# Get the full VPC instances list to look up IDs and current status by name
+INSTANCES_JSON=$(ibmcloud is instances --output JSON 2>/dev/null)
+if [ $? -ne 0 ] || [ -z "$INSTANCES_JSON" ]; then
+    echo -e "${RED}[ERROR] Failed to retrieve VPC instance details from IBM Cloud.${NC}"
+    exit 1
+fi
+
+# Filter to only running instances that match the tagged names
+MATCHING_IDS=""
+while IFS= read -r VSI_NAME; do
+    [ -z "$VSI_NAME" ] && continue
+    ID=$(echo "$INSTANCES_JSON" | jq -r --arg name "$VSI_NAME" \
+        '.[] | select(.name == $name and .status == "running") | .id')
+    if [ -n "$ID" ] && [ "$ID" != "null" ]; then
+        MATCHING_IDS="$MATCHING_IDS $ID"
+        echo -e "${RED}[!] Found running primary VSI: ${VSI_NAME} (${ID})${NC}"
+    else
+        STATUS=$(echo "$INSTANCES_JSON" | jq -r --arg name "$VSI_NAME" \
+            '.[] | select(.name == $name) | .status')
+        echo -e "${YELLOW}[~] VSI ${VSI_NAME} exists but is not running (status: ${STATUS:-not found in region}).${NC}"
+    fi
+done <<< "$MATCHING_NAMES"
+
+MATCHING_IDS=$(echo "$MATCHING_IDS" | xargs)  # trim whitespace
+
+if [ -z "$MATCHING_IDS" ]; then
+    echo -e "${GREEN}[✓] No running primary VSIs found. Already stopped or not deployed.${NC}"
+    exit 0
+fi
+
+echo -e "${RED}[!] DISASTER SIMULATION: Stopping the following primary VSIs in ${REGION}:${NC}"
 
 # Stop the instances
 for ID in $MATCHING_IDS; do
-    echo -e "${YELLOW}[*] Issuing stop command for VSI ${ID}...${NC}"
+    NAME=$(echo "$INSTANCES_JSON" | jq -r --arg id "$ID" '.[] | select(.id == $id) | .name')
+    echo -e "${YELLOW}[*] Issuing stop command for VSI ${NAME} (${ID})...${NC}"
     ibmcloud is instance-stop -f "$ID" &>/dev/null
     if [ $? -eq 0 ]; then
-         echo -e "${GREEN}[✓] Stop command sent successfully to VSI ${ID}.${NC}"
+        echo -e "${GREEN}[✓] Stop command sent successfully to VSI ${NAME} (${ID}).${NC}"
     else
-         echo -e "${RED}[WARNING] Failed to stop VSI ${ID}.${NC}"
+        echo -e "${RED}[WARNING] Failed to stop VSI ${NAME} (${ID}).${NC}"
     fi
 done
 
