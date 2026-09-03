@@ -34,7 +34,7 @@ existing_subnet_name_primary = ""
 
 # ── DR — eu-de ───────────────────────────────────────────────────
 ibm_region_dr = "eu-de"
-ibm_zone_dr   = "eu-de-2"
+ibm_zone_dr   = "eu-de-1"
 # ID-based lookup for eu-de (pre-provisioned dedicated lab VPC)
 existing_vpc_id_dr    = "r010-75fc4ba7-8a56-4a42-baaa-b6691a7f24ac"
 existing_subnet_id_dr = "02b7-df5e6a98-fa9c-4e87-b67c-057d360b62ba"
