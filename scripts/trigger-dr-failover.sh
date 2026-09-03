@@ -8,12 +8,14 @@
 
 set -o pipefail
 
-# ANSI color codes for pretty output
+# ANSI color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+BOLD='\033[1m'
+RESET='\033[0m'
+NC='\033[0m' # No Color (alias for RESET)
 
 echo -e "${BLUE}======================================================================${NC}"
 echo -e "${BLUE}              LAB-3931: DISASTER FAILOVER TRIGGER SIMULATION           ${NC}"
@@ -62,6 +64,28 @@ if [ -z "$ENVIRONMENT" ]; then
     usage
 fi
 
+# ── Environment confirmation table ───────────────────────────────────────────
+echo -e "\n${BLUE}┌─────────────────────────────────────────────────────────────┐${NC}"
+echo -e "${BLUE}│          CONFIRM YOUR ENVIRONMENT BEFORE PROCEEDING          │${NC}"
+echo -e "${BLUE}└─────────────────────────────────────────────────────────────┘${NC}\n"
+
+printf "  %-26s %s\n" "Student ID (project):" "${STUDENT_ID}"
+printf "  %-26s %s\n" "Environment (--env):"  "${ENVIRONMENT}"
+printf "  %-26s %s\n" "Region:"               "${REGION}"
+printf "  %-26s %s\n" "VSI tag filter:"       "project:${STUDENT_ID} + env:${ENVIRONMENT} + dr-role:primary"
+printf "  %-26s %s\n" "Action:"               "STOP all matching running VSIs in ${REGION}"
+
+echo -e "\n${YELLOW}  ⚠  This will STOP VSIs tagged with env:${ENVIRONMENT} only.${NC}"
+echo -e "${YELLOW}     If the values above are not YOUR environment, type 'no' now.${NC}\n"
+printf "  Type ${BOLD}yes${RESET} to proceed, anything else to abort: "
+
+read -r CONFIRM
+if [[ "${CONFIRM,,}" != "yes" ]]; then
+    echo -e "\n${GREEN}[✓] Aborted. No VSIs were stopped.${NC}"
+    exit 0
+fi
+
+echo -e ""
 echo -e "${YELLOW}[*] Target Student ID : ${STUDENT_ID}${NC}"
 echo -e "${YELLOW}[*] Target Region     : ${REGION}${NC}"
 echo -e "${YELLOW}[*] Environment       : ${ENVIRONMENT}${NC}"
