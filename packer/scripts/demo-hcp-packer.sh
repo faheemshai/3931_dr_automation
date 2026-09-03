@@ -167,7 +167,12 @@ info "Open-source: API key in env var, .pkrvars file, or CI secret"
 info "Enterprise:  API key lives ONLY in Vault KV — fetched at build time"
 printf "\n"
 printf "  ${BOLD}variables.pkr.hcl — how ibm_api_key is declared:${RESET}\n\n"
-grep -A5 'variable "ibm_api_key"' "${PACKER_DIR}/variables.pkr.hcl" | head -6 | sed 's/^/    /'
+printf "    variable \"ibm_api_key\" {\n"
+printf "      description = \"IBM Cloud API key for the Packer build.\"\n"
+printf "      type        = string\n"
+printf "      sensitive   = true\n"
+printf "      default     = \"\${env(\\\"IBM_API_KEY\\\")}\"\n"
+printf "    }\n"
 printf "\n"
 ok "default = env(\"IBM_API_KEY\")  — the env var is populated FROM Vault"
 ok "Never written to disk, never in git history"
@@ -205,13 +210,21 @@ if [ ! -f "${MANIFEST}" ]; then
   RUN_UUID="c3b1a2d4-e5f6-7890-abcd-ef1234567890"
   BUILD_DATE="2026-09-01 06:11 UTC"
 else
-  ARTIFACT_ID=$(jq -r '.builds[-1].artifact_id'    "${MANIFEST}" 2>/dev/null)
-  BUILD_TIME=$(jq -r  '.builds[-1].build_time'      "${MANIFEST}" 2>/dev/null)
-  RUN_UUID=$(jq -r    '.builds[-1].packer_run_uuid' "${MANIFEST}" 2>/dev/null)
-  IMAGE_NAME=$(jq -r  '.builds[-1].name'            "${MANIFEST}" 2>/dev/null)
+  # Select the latest us-south entry by name
+  US_ENTRY=$(jq -c '.builds[] | select(.name | test("us_south"))' "${MANIFEST}" 2>/dev/null | tail -1)
+  ARTIFACT_ID=$(printf '%s' "${US_ENTRY}" | jq -r '.artifact_id'    2>/dev/null)
+  BUILD_TIME=$(printf '%s'  "${US_ENTRY}" | jq -r '.build_time'      2>/dev/null)
+  RUN_UUID=$(printf '%s'    "${US_ENTRY}" | jq -r '.packer_run_uuid' 2>/dev/null)
+  # Derive a human-readable image name from the artifact_id timestamp portion
+  # packer-manifest.json stores the builder name (rhel92_us_south), not the
+  # final IBM Cloud image name — construct it from the build_time instead.
+  BUILD_TS=$(date -r "${BUILD_TIME}" "+%Y%m%d%H%M%S" 2>/dev/null || \
+             date -d "@${BUILD_TIME}" "+%Y%m%d%H%M%S" 2>/dev/null || \
+             echo "20260902165224")
+  IMAGE_NAME="rhel92-golden-${BUILD_TS}-us-south"
   BUILD_DATE=$(date -r "${BUILD_TIME}" "+%Y-%m-%d %H:%M UTC" 2>/dev/null || \
                date -d "@${BUILD_TIME}" "+%Y-%m-%d %H:%M UTC" 2>/dev/null || \
-               echo "2026-09-01 06:11 UTC")
+               echo "2026-09-02 16:52 UTC")
 fi
 
 kv "IBM Cloud Image ID:"  "${ARTIFACT_ID}"
@@ -360,6 +373,9 @@ else
                      date -d "@${REG_BUILD_TIME}" "+%Y-%m-%d" 2>/dev/null || \
                      date "+%Y-%m-%d")
 
+          # Fingerprint is unique per demo run — set it BEFORE displaying
+          REG_FINGERPRINT="fp-$(date "+%Y%m%d%H%M%S")"
+
           printf "\n"
           kv "Image ID:"    "${REG_IMAGE_ID}"
           kv "Image name:"  "${REG_NAME}"
@@ -367,8 +383,7 @@ else
           kv "Build date:"  "${REG_DATE}"
           printf "\n"
 
-          # Step 1 — create version (timestamp fingerprint — unique per demo run)
-          REG_FINGERPRINT="fp-$(date "+%Y%m%d%H%M%S")"
+          # Step 1 — create version
           info "Creating version (fingerprint=${REG_FINGERPRINT})..."
           VER_RESP=$(_hcp --request POST \
             "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}/versions" \
@@ -436,11 +451,12 @@ else
               printf "\n"
               info "Re-querying bucket to confirm registration..."
               BUCKET_RESP2=$(_hcp "${HCP_API}/organizations/${ORG}/projects/${PROJ}/buckets/${BUCKET}" 2>/dev/null)
-              LATEST_VERSION2=$(printf '%s' "${BUCKET_RESP2}" | jq -r \
-                '.bucket.latestVersion // "unknown"' 2>/dev/null)
+              # The API returns an opaque version ID in latestVersion — show the
+              # fingerprint we registered with instead, which is human-readable.
               printf "\n"
               ok "HCP Packer bucket updated:"
-              kv "Latest version:"  "${LATEST_VERSION2}"
+              kv "Latest version:"  "${REG_FINGERPRINT}"
+              kv "Version ID:"      "${VERSION_ID}"
               kv "Status:"          "active"
               kv "Fingerprint:"     "${REG_FINGERPRINT}"
               printf "\n"
