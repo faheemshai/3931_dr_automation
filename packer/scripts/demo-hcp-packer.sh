@@ -7,10 +7,14 @@
 # Shows the complete Packer Enterprise story using only READ
 # operations — no builds, no writes, no auth surprises on stage.
 #
-# You will be prompted for three inputs at startup:
-#   1. Vault token   (from: vault login → token)
-#   2. HCP client ID     (from: Vault → kv/Packer → client_id)
-#   3. HCP client secret (from: Vault → kv/Packer → client_secret)
+# You will be prompted for one input at startup:
+#   1. Vault token  (from: vault login → copy token)
+#
+# HCP Client ID and Secret are fetched automatically from Vault:
+#   vault kv get -namespace=admin -mount=kv -field=HCP_CLIENT_ID Packer
+#   vault kv get -namespace=admin -mount=kv -field=HCP_CLIENT_SECRET Packer
+#
+# If Vault is unavailable, you will be prompted to enter them manually.
 #
 # Usage:
 #   sh packer/scripts/demo-hcp-packer.sh
@@ -68,7 +72,7 @@ printf "  ${BOLD}HCP Packer Golden Image Demo${RESET}\n"
 printf "  From build → registry → Terraform → DR failover\n"
 
 printf "\n${CYAN}────────────────────────────────────────────────────${RESET}\n"
-printf "${BOLD}  Setup — enter credentials (input is hidden)${RESET}\n"
+printf "${BOLD}  Setup — enter Vault token (input is hidden)${RESET}\n"
 printf "${CYAN}────────────────────────────────────────────────────${RESET}\n\n"
 
 # ── Vault token ────────────────────────────────────────────────
@@ -78,41 +82,64 @@ printf "\n"
 if [ -z "${INPUT_VAULT_TOKEN}" ]; then
   warn "Vault token not provided — Vault reads will be skipped"
   VAULT_SKIP=1
+  HCP_SKIP=1
+  INPUT_HCP_ID=""
+  INPUT_HCP_SECRET=""
 else
   export VAULT_TOKEN="${INPUT_VAULT_TOKEN}"
   ok "Vault token accepted"
   VAULT_SKIP=0
+
+  # ── Auto-fetch HCP credentials from Vault kv/Packer ──────────
+  info "Fetching HCP credentials from Vault (kv/Packer)..."
+  INPUT_HCP_ID=$(vault kv get \
+    -namespace="${VAULT_NAMESPACE}" \
+    -mount=kv \
+    -field=HCP_CLIENT_ID \
+    Packer 2>/dev/null)
+  INPUT_HCP_SECRET=$(vault kv get \
+    -namespace="${VAULT_NAMESPACE}" \
+    -mount=kv \
+    -field=HCP_CLIENT_SECRET \
+    Packer 2>/dev/null)
+
+  if [ -n "${INPUT_HCP_ID}" ] && [ -n "${INPUT_HCP_SECRET}" ]; then
+    ok "HCP Client ID     auto-fetched from Vault (${#INPUT_HCP_ID} chars)"
+    ok "HCP Client Secret auto-fetched from Vault (${#INPUT_HCP_SECRET} chars)"
+    HCP_SKIP=0
+  else
+    warn "Auto-fetch failed — enter HCP credentials manually (input is hidden)"
+    printf "\n  ${YELLOW}HCP Client ID${RESET}  (Vault: kv/Packer → HCP_CLIENT_ID):\n  > "
+    stty -echo 2>/dev/null; read -r INPUT_HCP_ID; stty echo 2>/dev/null
+    printf "\n"
+    printf "\n  ${YELLOW}HCP Client Secret${RESET}  (Vault: kv/Packer → HCP_CLIENT_SECRET):\n  > "
+    stty -echo 2>/dev/null; read -r INPUT_HCP_SECRET; stty echo 2>/dev/null
+    printf "\n"
+    if [ -n "${INPUT_HCP_ID}" ] && [ -n "${INPUT_HCP_SECRET}" ]; then
+      HCP_SKIP=0
+    else
+      warn "HCP credentials not provided — Part 6 will show static fallback"
+      HCP_SKIP=1
+    fi
+  fi
 fi
-
-# ── HCP Client ID ──────────────────────────────────────────────
-printf "\n  ${YELLOW}HCP Client ID${RESET}  (Vault: kv/Packer → client_id):\n  > "
-stty -echo 2>/dev/null; read -r INPUT_HCP_ID; stty echo 2>/dev/null
-printf "\n"
-
-# ── HCP Client Secret ──────────────────────────────────────────
-printf "\n  ${YELLOW}HCP Client Secret${RESET}  (Vault: kv/Packer → client_secret):\n  > "
-stty -echo 2>/dev/null; read -r INPUT_HCP_SECRET; stty echo 2>/dev/null
-printf "\n"
 
 # ── Summary ────────────────────────────────────────────────────
 printf "\n${CYAN}────────────────────────────────────────────────────${RESET}\n"
 if [ -n "${INPUT_VAULT_TOKEN}" ]; then
-  ok "Vault token    set  (${#INPUT_VAULT_TOKEN} chars)"
+  ok "Vault token       set  (${#INPUT_VAULT_TOKEN} chars)"
 else
-  warn "Vault token    NOT set"
+  warn "Vault token       NOT set"
 fi
 if [ -n "${INPUT_HCP_ID}" ]; then
-  ok "HCP Client ID  set  (${#INPUT_HCP_ID} chars)"
-  HCP_SKIP=0
+  ok "HCP Client ID     set  (${#INPUT_HCP_ID} chars)"
 else
-  warn "HCP Client ID  NOT set — Part 6 will show static fallback"
-  HCP_SKIP=1
+  warn "HCP Client ID     NOT set — Part 6 will show static fallback"
 fi
 if [ -n "${INPUT_HCP_SECRET}" ]; then
-  ok "HCP Secret     set  (${#INPUT_HCP_SECRET} chars)"
+  ok "HCP Client Secret set  (${#INPUT_HCP_SECRET} chars)"
 else
-  warn "HCP Secret     NOT set — Part 6 will show static fallback"
-  HCP_SKIP=1
+  warn "HCP Client Secret NOT set — Part 6 will show static fallback"
 fi
 printf "\n  Press ENTER to begin the demo...\n"
 read -r _
