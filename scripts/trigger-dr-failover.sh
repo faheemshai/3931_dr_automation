@@ -19,16 +19,27 @@ echo -e "${BLUE}================================================================
 echo -e "${BLUE}              LAB-3931: DISASTER FAILOVER TRIGGER SIMULATION           ${NC}"
 echo -e "${BLUE}======================================================================${NC}"
 
-# Default parameters
+# Default parameters — ENVIRONMENT has no default intentionally.
+# It must match the exact value of the Terraform `environment` variable
+# used when the VSI was created (e.g. "s01", "s02", "demo").
+# Leaving it empty forces the caller to pass --env explicitly, which
+# prevents accidentally stopping another student's VSI.
 STUDENT_ID="lab3931"
 REGION="us-south"
-ENVIRONMENT="demo"
+ENVIRONMENT=""
 
 usage() {
-    echo "Usage: $0 --student-id <student_id> --region <region> [--env <env>]"
-    echo "  --student-id  The student/project prefix (default: lab3931)"
-    echo "  --region      The primary region to disrupt (default: us-south)"
-    echo "  --env         The environment label (default: demo)"
+    echo "Usage: $0 --env <environment> [--student-id <student_id>] [--region <region>]"
+    echo ""
+    echo "  --env         REQUIRED. The environment label matching your Terraform workspace"
+    echo "                variable. For multi-user lab: your student ID e.g. s01, s02, s03."
+    echo "                For single-user lab with environment=demo, pass: --env demo"
+    echo "  --student-id  Project prefix (default: lab3931)"
+    echo "  --region      Primary region to disrupt (default: us-south)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 --env s03"
+    echo "  $0 --env s03 --student-id lab3931 --region us-south"
     exit 1
 }
 
@@ -43,6 +54,13 @@ while [[ "$#" -gt 0 ]]; do
     esac
     shift
 done
+
+# --env is mandatory — fail immediately if not supplied
+if [ -z "$ENVIRONMENT" ]; then
+    echo -e "${RED}[ERROR] --env is required. Pass your student environment label (e.g. --env s03).${NC}"
+    echo -e "${YELLOW}        This prevents accidentally stopping another student's VSI.${NC}"
+    usage
+fi
 
 echo -e "${YELLOW}[*] Target Student ID : ${STUDENT_ID}${NC}"
 echo -e "${YELLOW}[*] Target Region     : ${REGION}${NC}"
