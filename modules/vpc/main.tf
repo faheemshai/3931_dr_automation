@@ -99,22 +99,14 @@ locals {
 # Key type must be declared explicitly — IBM Cloud VPC defaults to rsa
 # and rejects ed25519 keys without this field set.
 #
-# If a key with this name already exists in IBM Cloud (e.g. from a
-# prior run that was destroyed mid-flight), the data source picks it
-# up and the resource is skipped via count = 0, preventing the
-# "fingerprint already exists" error on re-runs.
-data "ibm_is_ssh_key" "existing" {
-  count = 1
-  name  = "${local.name_prefix}-vault-key"
-}
-
-locals {
-  # true when IBM Cloud already has a key with this name
-  ssh_key_exists = length(data.ibm_is_ssh_key.existing) > 0 && data.ibm_is_ssh_key.existing[0].id != ""
-}
-
+# Lab parallel-safety design:
+#   • Each student's key name is unique: <project>-<environment>-vault-key
+#     e.g. lab3931-s01-vault-key, lab3931-s02-vault-key — NO cross-student collision.
+#   • ignore_changes = [public_key, tags] prevents re-runs from attempting
+#     an in-place update (IBM Cloud SSH keys are immutable after creation).
+#   • create_before_destroy = false prevents a delete+recreate cycle that
+#     would break any VSIs already using this key.
 resource "ibm_is_ssh_key" "vault_key" {
-  count          = local.ssh_key_exists ? 0 : 1
   name           = "${local.name_prefix}-vault-key"
   public_key     = var.ssh_public_key
   type           = "ed25519"
@@ -123,7 +115,9 @@ resource "ibm_is_ssh_key" "vault_key" {
   tags = ["project:${var.project}", "env:${var.environment}", "source:vault"]
 
   lifecycle {
-    # public_key is write-once in IBM Cloud — ignore drift after creation
-    ignore_changes = [public_key]
+    # public_key and tags are effectively immutable after first apply —
+    # ignore any drift so re-runs never attempt an illegal update or recreate.
+    ignore_changes       = [public_key, tags]
+    create_before_destroy = false
   }
 }

@@ -23,7 +23,5 @@ output "subnet_crn" {
 
 output "ssh_key_id" {
   description = "ID of the IBM Cloud SSH key registered from Vault"
-  # Adopt the existing key when it was already in IBM Cloud; otherwise
-  # use the one just created.
-  value = local.ssh_key_exists ? data.ibm_is_ssh_key.existing[0].id : ibm_is_ssh_key.vault_key[0].id
+  value       = ibm_is_ssh_key.vault_key.id
 }
