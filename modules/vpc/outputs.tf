@@ -22,6 +22,6 @@ output "subnet_crn" {
 }
 
 output "ssh_key_id" {
-  description = "ID of the IBM Cloud SSH key registered from Vault"
-  value       = ibm_is_ssh_key.vault_key.id
+  description = "ID of the shared IBM Cloud SSH key (looked up by ID)"
+  value       = data.ibm_is_ssh_key.shared.id
 }

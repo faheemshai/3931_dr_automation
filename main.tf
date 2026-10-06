@@ -68,7 +68,7 @@ module "networking_primary" {
   existing_vpc_name    = var.existing_vpc_name_primary
   existing_subnet_name = var.existing_subnet_name_primary
 
-  ssh_public_key = local.ssh_public_key
+  ssh_key_id = var.ssh_key_id
 }
 
 module "security_groups_primary" {
@@ -131,7 +131,7 @@ module "networking_dr" {
   existing_vpc_name    = var.existing_vpc_name_dr
   existing_subnet_name = var.existing_subnet_name_dr
 
-  ssh_public_key = local.ssh_public_key
+  ssh_key_id = var.ssh_key_id
 }
 
 module "security_groups_dr" {

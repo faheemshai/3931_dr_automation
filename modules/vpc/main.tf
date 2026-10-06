@@ -95,29 +95,15 @@ locals {
   )
 }
 
-# ── SSH Key (public key loaded from Vault) ────────────────────────
-# Key type must be declared explicitly — IBM Cloud VPC defaults to rsa
-# and rejects ed25519 keys without this field set.
+# ── SSH Key — looked up by ID (pre-registered, shared across all students) ──
+# IBM Cloud enforces fingerprint uniqueness account-wide.
+# All students share the same public key material from Vault, so registering
+# it per-student would cause "fingerprint already exists" for every student
+# after the first.
 #
-# Lab parallel-safety design:
-#   • Each student's key name is unique: <project>-<environment>-vault-key
-#     e.g. lab3931-s01-vault-key, lab3931-s02-vault-key — NO cross-student collision.
-#   • ignore_changes = [public_key, tags] prevents re-runs from attempting
-#     an in-place update (IBM Cloud SSH keys are immutable after creation).
-#   • create_before_destroy = false prevents a delete+recreate cycle that
-#     would break any VSIs already using this key.
-resource "ibm_is_ssh_key" "vault_key" {
-  name           = "${local.name_prefix}-vault-key"
-  public_key     = var.ssh_public_key
-  type           = "ed25519"
-  resource_group = var.ibm_resource_group_id
-
-  tags = ["project:${var.project}", "env:${var.environment}", "source:vault"]
-
-  lifecycle {
-    # public_key and tags are effectively immutable after first apply —
-    # ignore any drift so re-runs never attempt an illegal update or recreate.
-    ignore_changes       = [public_key, tags]
-    create_before_destroy = false
-  }
+# Solution: register the key ONCE manually (or via instructor script), then
+# pass its IBM Cloud ID into every workspace as var.ssh_key_id.
+# This module simply looks it up — no create, no fingerprint conflict.
+data "ibm_is_ssh_key" "shared" {
+  identifier = var.ssh_key_id
 }

@@ -162,6 +162,13 @@ variable "vsi_profile" {
   default     = "cx2-2x4"
 }
 
+# ── Shared SSH Key ID ────────────────────────────────────────────
+variable "ssh_key_id" {
+  description = "IBM Cloud SSH key ID (r006-...) pre-registered once in IBM Cloud, shared by all student workspaces. Set this in the HCP Terraform workspace variable."
+  type        = string
+  default     = ""
+}
+
 # ── Vault Enterprise ─────────────────────────────────────────────
 variable "vault_address" {
   description = "Vault server URL"

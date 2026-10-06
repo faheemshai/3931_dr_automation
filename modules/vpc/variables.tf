@@ -78,10 +78,9 @@ variable "existing_subnet_name" {
   default = ""
 }
 
-variable "ssh_public_key" {
-  description = "SSH public key material (from Vault) to register as an IBM Cloud SSH key"
+variable "ssh_key_id" {
+  description = "IBM Cloud SSH key ID (r006-...) — pre-registered once, shared by all student workspaces"
   type        = string
-  sensitive   = true
 }
 
 variable "ibm_resource_group_id" {
