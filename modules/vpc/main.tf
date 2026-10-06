@@ -95,15 +95,12 @@ locals {
   )
 }
 
-# ── SSH Key — looked up by ID (pre-registered, shared across all students) ──
+# ── SSH Key — passed in by ID, no lookup needed ──────────────────
 # IBM Cloud enforces fingerprint uniqueness account-wide.
-# All students share the same public key material from Vault, so registering
-# it per-student would cause "fingerprint already exists" for every student
-# after the first.
+# All students share the same public key material from Vault, so
+# registering it per-student causes "fingerprint already exists".
 #
-# Solution: register the key ONCE manually (or via instructor script), then
-# pass its IBM Cloud ID into every workspace as var.ssh_key_id.
-# This module simply looks it up — no create, no fingerprint conflict.
-data "ibm_is_ssh_key" "shared" {
-  identifier = var.ssh_key_id
-}
+# Solution: register the key ONCE (instructor pre-step), then pass
+# its IBM Cloud resource ID directly via var.ssh_key_id.
+# The VSI resource accepts the key ID directly in its keys = [...] list,
+# so no data source lookup is needed here at all.

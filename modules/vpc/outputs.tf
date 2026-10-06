@@ -22,6 +22,6 @@ output "subnet_crn" {
 }
 
 output "ssh_key_id" {
-  description = "ID of the shared IBM Cloud SSH key (looked up by ID)"
-  value       = data.ibm_is_ssh_key.shared.id
+  description = "ID of the shared IBM Cloud SSH key (pre-registered, passed in as variable)"
+  value       = var.ssh_key_id
 }
