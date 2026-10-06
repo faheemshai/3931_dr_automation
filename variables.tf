@@ -162,11 +162,17 @@ variable "vsi_profile" {
   default     = "cx2-2x4"
 }
 
-# ── Shared SSH Key ID ────────────────────────────────────────────
+# ── Shared SSH Key IDs (region-scoped — IBM Cloud keys are per-region) ────────
 variable "ssh_key_id" {
-  description = "IBM Cloud SSH key ID (r006-...) pre-registered once in IBM Cloud, shared by all student workspaces. Set this in the HCP Terraform workspace variable."
+  description = "IBM Cloud SSH key ID for us-south (r006-...) — pre-registered once, shared by all student workspaces."
   type        = string
-  default     = ""
+  default     = "r006-12a01b27-24af-427a-a18e-504c97c94bfc"
+}
+
+variable "ssh_key_id_dr" {
+  description = "IBM Cloud SSH key ID for eu-de (r010-...) — pre-registered once, shared by all student workspaces."
+  type        = string
+  default     = "r010-de757cd1-c4ee-4c17-be41-5262ad5eed44"
 }
 
 # ── Vault Enterprise ─────────────────────────────────────────────

@@ -79,7 +79,7 @@ variable "existing_subnet_name" {
 }
 
 variable "ssh_key_id" {
-  description = "IBM Cloud SSH key ID (r006-...) — pre-registered once, shared by all student workspaces"
+  description = "IBM Cloud SSH key ID for this region — pre-registered once, shared by all student workspaces"
   type        = string
 }
 

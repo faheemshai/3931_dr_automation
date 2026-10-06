@@ -131,7 +131,7 @@ module "networking_dr" {
   existing_vpc_name    = var.existing_vpc_name_dr
   existing_subnet_name = var.existing_subnet_name_dr
 
-  ssh_key_id = var.ssh_key_id
+  ssh_key_id = var.ssh_key_id_dr
 }
 
 module "security_groups_dr" {
