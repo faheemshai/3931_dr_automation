@@ -80,7 +80,9 @@ echo -e "${YELLOW}     If the values above are not YOUR environment, type 'no' n
 printf "  Type ${BOLD}yes${RESET} to proceed, anything else to abort: "
 
 read -r CONFIRM
-if [[ "${CONFIRM,,}" != "yes" ]]; then
+# ${var,,} (bash 4 lowercase) is unavailable on some systems — use tr instead
+CONFIRM_LC=$(echo "$CONFIRM" | tr '[:upper:]' '[:lower:]')
+if [[ "$CONFIRM_LC" != "yes" ]]; then
     echo -e "\n${GREEN}[✓] Aborted. No VSIs were stopped.${NC}"
     exit 0
 fi
@@ -97,11 +99,19 @@ if ! command -v ibmcloud &> /dev/null; then
     exit 1
 fi
 
+# Validate region looks sane before hitting the API
+case "$REGION" in
+  us-south|us-east|eu-de|eu-gb|jp-tok|jp-osa|au-syd|ca-tor|br-sao) ;;
+  *)
+    echo -e "${RED}[ERROR] Unrecognised region '${REGION}'. Did you mean 'us-south'?${NC}"
+    exit 1 ;;
+esac
+
 # Target region
 echo -e "${YELLOW}[*] Setting target region to ${REGION}...${NC}"
-ibmcloud target -r "$REGION" &> /dev/null
-if [ $? -ne 0 ]; then
-    echo -e "${RED}[ERROR] Failed to target region ${REGION}. Are you logged in?${NC}"
+if ! ibmcloud target -r "$REGION" &> /dev/null; then
+    echo -e "${RED}[ERROR] Failed to target region ${REGION}.${NC}"
+    echo -e "${YELLOW}        Run: ibmcloud login --apikey <YOUR_IBM_API_KEY> --no-region${NC}"
     exit 1
 fi
 
