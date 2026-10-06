@@ -98,11 +98,32 @@ locals {
 # ── SSH Key (public key loaded from Vault) ────────────────────────
 # Key type must be declared explicitly — IBM Cloud VPC defaults to rsa
 # and rejects ed25519 keys without this field set.
+#
+# If a key with this name already exists in IBM Cloud (e.g. from a
+# prior run that was destroyed mid-flight), the data source picks it
+# up and the resource is skipped via count = 0, preventing the
+# "fingerprint already exists" error on re-runs.
+data "ibm_is_ssh_key" "existing" {
+  count = 1
+  name  = "${local.name_prefix}-vault-key"
+}
+
+locals {
+  # true when IBM Cloud already has a key with this name
+  ssh_key_exists = length(data.ibm_is_ssh_key.existing) > 0 && data.ibm_is_ssh_key.existing[0].id != ""
+}
+
 resource "ibm_is_ssh_key" "vault_key" {
+  count          = local.ssh_key_exists ? 0 : 1
   name           = "${local.name_prefix}-vault-key"
   public_key     = var.ssh_public_key
   type           = "ed25519"
   resource_group = var.ibm_resource_group_id
 
   tags = ["project:${var.project}", "env:${var.environment}", "source:vault"]
+
+  lifecycle {
+    # public_key is write-once in IBM Cloud — ignore drift after creation
+    ignore_changes = [public_key]
+  }
 }
